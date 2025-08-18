@@ -1,55 +1,54 @@
-import { logger } from './logger.js';
 import chalk from 'chalk';
 import { topo } from '@semrel-extra/topo';
 import { sortBy } from 'lodash-es';
-
-// @ts-expect-error Could not find a declaration file for module
-import getConfigSemantic from 'semantic-release/lib/get-config.js';
+import { cwd, env, stderr, stdout } from 'node:process';
 
 import { getConfigMultiSemantic } from './get-config-multi-semrel.js';
 import { getConfig } from './get-config.js';
 import { getPackage } from './get-package.js';
 import { getInlinePluginCreator } from './get-inline-plugin-creator.js';
-import type { MultiContext } from './types.js';
+import type { MultiContext, Package, ReleaseOptions } from './types.js';
 import { releasePackage } from './release-package.js';
+import { logger } from './utils/logging/logger.js';
 
-export async function multiSemanticRelease({
+/**
+ * Runs a multi‑release for all packages in the workspace.
+ * Builds the dependency graph, prepares a queue, and releases packages in order.
+ * @param cliOptions CLI options that affect the process
+ * @returns List of packages with populated result fields
+ */
+export const multiSemanticRelease = async ({
   cliOptions = {},
 }: {
-  cliOptions?: Record<string, any>;
-}) {
-  const cwd = process.cwd();
-  const env = process.env;
-  const stderr = process.stderr;
-  const stdout = process.stdout;
+  cliOptions?: ReleaseOptions;
+}): Promise<Package[]> => {
+  const calledCwd = cwd();
 
-  const options = await getConfigMultiSemantic(cwd, cliOptions);
+  const options = await getConfigMultiSemantic(calledCwd, cliOptions);
 
-  const globalOptions = await getConfig(cwd);
+  const globalOptions = await getConfig(calledCwd);
   const multiContext: MultiContext = {
-    cwd,
+    cwd: calledCwd,
     env,
     globalOptions,
     stderr,
     stdout,
   };
-  const { packages: topoPackages, queue } = await topo({
+  const topoResult = (await topo({
     cwd,
-    filter: ({
-      manifest,
-      manifestAbsPath,
-      manifestRelPath,
-    }: {
-      manifest: any;
-      manifestAbsPath: any;
-      manifestRelPath: any;
-    }) => !options.ignorePrivate || !manifest.private,
+    filter: ({ manifest }: { manifest: { private?: boolean } }) =>
+      !options.ignorePrivate || !manifest.private,
     workspacesExtra: Array.isArray(options.ignorePackages)
       ? options.ignorePackages.map((p: string) => `!${p}`)
       : [],
-  });
+  })) as {
+    packages: Record<string, { manifestPath: string }>;
+    queue: string[];
+  };
 
-  const paths = Object.values(topoPackages).map((p: any) => p.manifestPath);
+  const { packages: topoPackages, queue } = topoResult;
+
+  const paths = Object.values(topoPackages).map((p) => p.manifestPath);
 
   logger.info(
     `Started multi-release — ${chalk.inverse(`Loading ${paths.length} packages...`)}`,
@@ -67,10 +66,11 @@ export async function multiSemanticRelease({
     // Once we load all the packages we can find their cross refs
     // Make a list of local dependencies.
     // Map dependency names (e.g. my-awesome-dep) to their actual package objects in the packages array.
-    // @ts-expect-error Add localDeps property dynamically if not present in type
     pkg.localDeps = [
       ...new Set(
-        pkg.deps.map((d) => packages.find((p) => d === p.name)).filter(Boolean),
+        pkg.deps
+          .map((d) => packages.find((p) => d === p.name))
+          .filter((dep): dep is Package => dep !== undefined),
       ),
     ];
 
@@ -89,12 +89,12 @@ export async function multiSemanticRelease({
   );
 
   const released = await queue.reduce(
-    async (_m: Promise<number>, _name: string) => {
-      const m = await _m;
-      const package_ = packages.find(({ name }) => name === _name);
+    async (accPromise: Promise<number>, packageName: string) => {
+      const acc = await accPromise;
+      const package_ = packages.find(({ name }) => name === packageName);
 
       if (package_) {
-        const { result } = await releasePackage(
+        const result = await releasePackage(
           package_,
           createInlinePlugin,
           multiContext,
@@ -102,11 +102,11 @@ export async function multiSemanticRelease({
         );
 
         if (result) {
-          return m + 1;
+          return acc + 1;
         }
       }
 
-      return m;
+      return acc;
     },
     Promise.resolve(0),
   );
@@ -119,4 +119,4 @@ export async function multiSemanticRelease({
   );
 
   return sortBy(packages, ({ name }) => queue.indexOf(name));
-}
+};

@@ -37,36 +37,47 @@ function readManifest(path: string): string {
 
 /**
  * Get the parsed contents of a package.json manifest file.
- * @param path The path to the package.json manifest file.
- * @returns The manifest file's contents.
- * @internal
+ * Performs structural validation and attaches the raw file contents
+ * to a non-enumerable `__contents__` property for formatting purposes.
+ *
+ * @param path Absolute path to package.json
+ * @returns Validated Manifest object
+ * @throws ReferenceError if the file does not exist or is unreadable
+ * @throws SyntaxError if the file cannot be parsed or is structurally invalid
  */
 export default function getManifest(path: string): Manifest {
   // Read the file.
   const contents = readManifest(path);
 
   // Parse the file.
-  let manifest;
+  let parsed: unknown;
 
   try {
-    manifest = JSON.parse(contents);
+    parsed = JSON.parse(contents);
   } catch {
     throw new SyntaxError(`package.json could not be parsed: "${path}"`);
   }
 
   // Must be an object.
-  if (typeof manifest !== 'object') {
+  if (typeof parsed !== 'object' || parsed === null) {
     throw new SyntaxError(`package.json was not an object: "${path}"`);
   }
 
+  const manifestObj = parsed as Record<string, unknown>;
+
   // Must have a name
-  if (typeof manifest.name !== 'string' || manifest.name.length === 0) {
+  const name = manifestObj['name'];
+  if (typeof name !== 'string' || name.length === 0) {
     throw new SyntaxError(`Package name must be non-empty string: "${path}"`);
   }
 
   // Check dependencies
-  const checkDeps = (scope: any) => {
-    if (manifest.hasOwnProperty(scope) && typeof manifest[scope] !== 'object') {
+  const checkDeps = (scope: string): void => {
+    const value = manifestObj[scope];
+    if (
+      Object.prototype.hasOwnProperty.call(manifestObj, scope) &&
+      typeof value !== 'object'
+    ) {
       throw new SyntaxError(`Package ${scope} must be object: "${path}"`);
     }
   };
@@ -77,10 +88,10 @@ export default function getManifest(path: string): Manifest {
   checkDeps('optionalDependencies');
 
   // NOTE non-enumerable prop is skipped by JSON.stringify
-  Object.defineProperty(manifest, '__contents__', {
+  Object.defineProperty(manifestObj, '__contents__', {
     enumerable: false,
     value: contents,
   });
 
-  return manifest;
+  return manifestObj as unknown as Manifest;
 }

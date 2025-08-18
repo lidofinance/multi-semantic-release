@@ -1,4 +1,6 @@
-export function streamToArray(stream: any): Promise<any[]> {
+import type { Readable } from 'node:stream';
+
+export function streamToArray<T = unknown>(stream: Readable): Promise<T[]> {
   if (!stream.readable) {
     return Promise.resolve([]);
   }
@@ -11,9 +13,9 @@ export function streamToArray(stream: any): Promise<any[]> {
       return;
     }
 
-    let array: any[] = [];
+    let array: T[] = [];
 
-    function cleanup() {
+    function cleanup(): void {
       array = [];
 
       stream.removeListener('data', onData);
@@ -22,21 +24,21 @@ export function streamToArray(stream: any): Promise<any[]> {
       stream.removeListener('close', onClose);
     }
 
-    function onData(document: any) {
+    function onData(document: T): void {
       array.push(document);
     }
 
-    function onEnd() {
+    function onEnd(): void {
       resolve(array);
       cleanup();
     }
 
-    function onError(error: Error) {
+    function onError(error: Error): void {
       reject(error);
       cleanup();
     }
 
-    function onClose() {
+    function onClose(): void {
       resolve(array);
       cleanup();
     }

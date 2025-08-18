@@ -3,10 +3,17 @@ import { dirname } from 'node:path';
 // @ts-expect-error Could not find a declaration file for module
 import getConfigSemantic from 'semantic-release/lib/get-config.js';
 
-import type { Package, Manifest, MultiContext } from './types.js';
+import type {
+  Package,
+  Manifest,
+  MultiContext,
+  OptionsConfig,
+  SemanticReleasePlugins,
+} from './types.js';
 import { cleanPath } from './utils/clean-path.js';
 import getManifest from './utils/get-manifest.js';
 import { getConfig } from './get-config.js';
+import type { Logger } from './types.js';
 
 /**
  * Loads details about a package.
@@ -26,7 +33,7 @@ export async function getPackage(
   const directory = dirname(path);
 
   // Get package.json file contents.
-  const manifest = getManifest(path);
+  const manifest: Manifest = getManifest(path);
   const { name } = manifest;
 
   // Combine list of all dependency names.
@@ -45,14 +52,15 @@ export async function getPackage(
   const finalOptions = { ...globalOptions, ...packageOptions };
 
   // Make a fake logger so semantic-release's get-config doesn't fail.
-  const fakeLogger = { error() {}, log() {} };
+  const fakeLogger: Logger = { error() {}, log() {} };
 
   // Use semantic-release's internal config with the final options (now we have the right `options.plugins` setting) to get the plugins object and the options including defaults.
   // We need this so we can call e.g. plugins.analyzeCommit() to be able to affect the input and output of the whole set of plugins.
-  const { options, plugins } = await getConfigSemantic(
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+  const { options, plugins } = (await getConfigSemantic(
     { cwd: directory, env, stderr, stdout },
     finalOptions,
-  );
+  )) as { options: OptionsConfig; plugins: SemanticReleasePlugins };
 
   // Return package object.
   return {

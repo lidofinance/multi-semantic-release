@@ -10,30 +10,19 @@ import semrelPkgJson from 'semantic-release/package.json' with { type: 'json' };
 
 import { multiSemanticRelease } from './multi-semantic-release.js';
 import { LOGS_APPNAME } from './constants.js';
-import { logger } from './logger.js';
+import { logger, consoleLog } from './utils/logging/index.js';
+import type { ReleaseOptions } from './types.js';
 
-export interface ReleaseOptions {
-  dryRun?: boolean;
-  // verbose?: boolean;
-  debug?: boolean;
-  silent?: boolean;
-  sequentialInit?: boolean;
-  sequentialPrepare?: boolean;
-  firstParent?: boolean;
-  'deps.bump'?: string;
-  'deps.release'?: string;
-  'deps.prefix'?: string;
-  'deps.pullTagsForPrerelease'?: boolean;
-  ignorePackages?: string[];
-  ignorePrivate?: boolean;
-  tagFormat?: string;
-}
-
-export function executeRelease(options: ReleaseOptions = {}) {
-  console.log(chalk.blue(`🚀 Starting ${LOGS_APPNAME}...`));
+/**
+ * CLI entrypoint: runs multi‑semantic‑release with provided options.
+ * Manages logging levels and modes (debug/dry‑run/silent).
+ * @param options Release options
+ */
+export function executeRelease(options: ReleaseOptions = {}): void {
+  consoleLog(`🚀 Starting ${LOGS_APPNAME}...`, 'LOG');
 
   if (options.dryRun) {
-    console.log(chalk.yellow('📋 Running in dry-run mode'));
+    consoleLog('📋 Running in dry-run mode', 'Warning');
   }
 
   // if (options.verbose) {
@@ -41,12 +30,12 @@ export function executeRelease(options: ReleaseOptions = {}) {
   // }
 
   if (options.silent) {
-    console.log(chalk.gray('🔕 Silent mode enabled'));
+    consoleLog('🔕 Silent mode enabled', 'Info');
     logger.silent = true;
   }
 
   if (options.debug) {
-    console.log(chalk.gray('🔧 Debug mode enabled'));
+    consoleLog('🔧 Debug mode enabled', 'Info');
     logger.level = 'debug';
   }
 
@@ -61,11 +50,11 @@ export function executeRelease(options: ReleaseOptions = {}) {
 
   multiSemanticRelease({ cliOptions: options }).then(
     () => {
-      console.log(chalk.green('✅ Release completed successfully!'));
+      consoleLog('✅ Release completed successfully!', 'Success');
       exit(0);
     },
     (error) => {
-      console.error('[multi-semantic-release]:', error);
+      consoleLog(`[multi-semantic-release]: ${error}`, 'Error');
       exit(1);
     },
   );
@@ -130,6 +119,6 @@ try {
   program.parse();
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Unknown error';
-  console.error(chalk.red('❌ Error:'), message);
-  process.exit(1);
+  consoleLog(`❌ Error: ${message}`, 'Error');
+  exit(1);
 }

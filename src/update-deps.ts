@@ -6,22 +6,22 @@ import semver from 'semver';
 import getManifest from './utils/get-manifest.js';
 import { getHighestVersion, getLatestVersion } from './utils/get-version.js';
 import { recognizeFormat } from './utils/recognize-format.js';
-import type { Manifest } from './types.js';
-import { logger } from './logger.js';
+import type { Manifest, Package } from './types.js';
+import { logger } from './utils/logging/logger.js';
 
 /**
- * Resolve next prerelease comparing bumped tags versions with last version.
- * @param latestTag - Last released tag from branch or null if non-existent.
- * @param lastVersion - Last version released.
- * @param packagePreRelease - Prerelease tag from package to-be-released.
- * @returns Next pkg version.
+ * Resolve the next prerelease version comparing bumped tag versions with last version.
+ * @param latestTag Last released tag from branch or null if non-existent
+ * @param lastVersion Last version released
+ * @param packagePreRelease Prerelease identifier from the package to be released
+ * @returns Next prerelease version or undefined
  * @internal
  */
 const _nextPreHighestVersion = (
   latestTag: string | null | undefined,
   lastVersion: string,
   packagePreRelease: string,
-) => {
+): string | undefined => {
   const bumpFromTags = latestTag
     ? semver.inc(latestTag, 'prerelease', packagePreRelease)
     : undefined;
@@ -34,18 +34,18 @@ const _nextPreHighestVersion = (
 };
 
 /**
- * Resolve next prerelease special cases: highest version from tags or major/minor/patch.#
- * @param tags - if non-empty, we will use these tags as part fo the comparison
- * @param lastVersionForCurrentMultiRelease - Last package version released from multi-semantic-release
- * @param packageNextType - Next type evaluated for the next package type.
- * @param packagePreRelease - Package prerelease suffix.
- * @returns Next pkg version.
+ * Resolve next prerelease with special cases (highest version from tags or major/minor/patch).
+ * @param tags Tags to include in comparison (if any)
+ * @param lastVersionForCurrentMultiRelease Last version released in this multi-release cycle
+ * @param packageNextType Next release type evaluated for the package
+ * @param packagePreRelease Package prerelease identifier
+ * @returns Next prerelease version or undefined
  * @internal
  */
 const _nextPreVersionCases = (
   tags: string[],
   lastVersionForCurrentMultiRelease: string,
-  packageNextType: string,
+  packageNextType: import('semver').ReleaseType,
   packagePreRelease: string,
 ): string | undefined => {
   // Case 1: Normal release on last version and is now converted to a prerelease
@@ -54,8 +54,10 @@ const _nextPreVersionCases = (
       lastVersionForCurrentMultiRelease,
     )!;
 
-    // @ts-expect-error
-    return `${semver.inc(`${major}.${minor}.${patch}`, packageNextType || 'patch')}-${packagePreRelease}.1`;
+    return `${semver.inc(
+      `${major}.${minor}.${patch}`,
+      packageNextType,
+    )}-${packagePreRelease}.1`;
   }
 
   // Case 2: Validates version with tags
@@ -69,24 +71,25 @@ const _nextPreVersionCases = (
 };
 
 /**
- * Get dependent release type by recursive scanning and updating pkg deps.
- * @param package_ - The package with local deps to check.
- * @param bumpStrategy - Dependency resolution strategy: override, satisfy, inherit.
- * @param releaseStrategy - Release type triggered by deps updating: patch, minor, major, inherit.
- * @param ignore - Packages to ignore (to prevent infinite loops).
- * @param prefix - Dependency version prefix to be attached if `bumpStrategy='override'`. ^ | ~ | '' (defaults to empty string)
- * @returns Returns the highest release type if found, undefined otherwise
+ * Determine dependent release type by scanning and updating local dependencies.
+ * @param package_ The package with local dependencies to check
+ * @param bumpStrategy Dependency resolution strategy: override, satisfy, inherit
+ * @param releaseStrategy Release type when deps are updated: patch, minor, major, inherit
+ * @param ignore Packages to ignore (prevents infinite loops)
+ * @param prefix Dependency version prefix if bumpStrategy is 'override' ("^" | "~" | "")
+ * @returns Highest release type if found; otherwise undefined
  * @internal
  */
 const getDependentRelease = (
-  package_: any,
+  package_: Package,
   bumpStrategy: string,
   releaseStrategy: string,
-  ignore: any[],
+  ignore: Package[],
   prefix: string,
 ): string | undefined => {
   const severityOrder = ['patch', 'minor', 'major'];
-  const { localDeps, manifest = {} } = package_;
+  const { localDeps, manifest } = package_;
+  if (!manifest) return undefined;
   const lastVersion = package_._lastRelease && package_._lastRelease.version;
   const {
     dependencies = {},
@@ -103,7 +106,7 @@ const getDependentRelease = (
   const bumpDependency = (
     scope: Record<string, string>,
     name: string,
-    nextVersion: string,
+    nextVersion: string | undefined,
   ): boolean => {
     const currentVersion = scope[name];
 
@@ -128,8 +131,8 @@ const getDependentRelease = (
   };
 
   return localDeps
-    .filter((p: any) => !ignore.includes(p))
-    .reduce((releaseType: string | undefined, p: any) => {
+    ?.filter((p: Package) => !ignore.includes(p))
+    .reduce((releaseType: string | undefined, p: Package) => {
       // Has changed if...
       // 1. Any local dep package itself has changed
       // 2. Any local dep package has local deps that have changed.
@@ -157,23 +160,20 @@ const getDependentRelease = (
       );
 
       return requireRelease &&
-        // @ts-expect-error nextType can be undefined
+        nextType &&
         severityOrder.indexOf(nextType) >
-          // @ts-expect-error releaseType can be undefined
-          severityOrder.indexOf(releaseType)
+          severityOrder.indexOf(releaseType || 'patch')
         ? nextType
         : releaseType;
     }, undefined);
 };
 
 /**
- * Substitute "workspace:" in currentVersion
- * See:
- * {@link https://yarnpkg.com/features/workspaces#publishing-workspaces}
- * {@link https://pnpm.io/workspaces#publishing-workspace-packages}
- * @param currentVersion - Current version, may start with "workspace:"
- * @param nextVersion - Next version
- * @returns current version without "workspace:"
+ * Substitute the Yarn/PNPM workspace protocol in a version string for comparison.
+ * See: Yarn and PNPM workspace publishing docs.
+ * @param currentVersion Current version, may start with "workspace:"
+ * @param nextVersion Next version value
+ * @returns Current version without the "workspace:" protocol
  */
 const substituteWorkspaceVersion = (
   currentVersion: string,
@@ -194,23 +194,29 @@ const substituteWorkspaceVersion = (
 
 // https://gist.github.com/Yimiprod/7ee176597fef230d1451
 const difference = (
-  object: Record<string, any>,
-  base: Record<string, any>,
-): Record<string, any> =>
-  transform(object, (result: Record<string, any>, value: any, key: string) => {
-    if (!isEqual(value, base[key])) {
-      result[key] =
-        isObject(value) && isObject(base[key])
-          ? difference(value, base[key])
-          : `${base[key]} → ${value}`;
-    }
-  });
+  object: Record<string, unknown>,
+  base: Record<string, unknown>,
+): Record<string, unknown> =>
+  transform(
+    object,
+    (result: Record<string, unknown>, value: unknown, key: string) => {
+      if (!isEqual(value, base[key])) {
+        result[key] =
+          isObject(value) && isObject(base[key])
+            ? difference(
+                value as Record<string, unknown>,
+                base[key] as Record<string, unknown>,
+              )
+            : `${String(base[key])} → ${String(value)}`;
+      }
+    },
+  );
 
 /**
- * Clarify what exactly was changed in manifest file.
- * @param actualManifest - manifest object
- * @param path - manifest path
- * @returns has changed or not
+ * Compute and log dependency differences between the current and previous manifest.
+ * @param actualManifest Current manifest
+ * @param path Path to package.json
+ * @returns True if dependency sections changed; false otherwise
  * @internal
  */
 const auditManifestChanges = (
@@ -226,9 +232,12 @@ const auditManifestChanges = (
     'optionalDependencies',
   ];
   const changes = depScopes.reduce(
-    (result: Record<string, any>, scope: string) => {
-      // @ts-expect-error Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Manifest'.
-      const diff = difference(actualManifest[scope], oldManifest[scope]);
+    (result: Record<string, unknown>, scope: string) => {
+      const actualRecord = actualManifest as unknown as Record<string, unknown>;
+      const oldRecord = oldManifest as unknown as Record<string, unknown>;
+      const actual = actualRecord[scope] as Record<string, unknown> | undefined;
+      const old = oldRecord[scope] as Record<string, unknown> | undefined;
+      const diff = difference(actual || {}, old || {});
 
       if (Object.keys(diff).length > 0) {
         result[scope] = diff;
@@ -253,23 +262,26 @@ const auditManifestChanges = (
 };
 
 /**
- * Resolve next package version.
- * @param package_ - Package object.
- * @returns Next pkg version.
+ * Resolve the next stable package version based on the last release and next type.
+ * @param package_ Package object
+ * @returns Next version or undefined if not applicable
  * @internal
  */
-export const getNextVersion = (package_: any): string | undefined => {
+export const getNextVersion = (package_: Package): string | undefined => {
   const lastVersion = package_._lastRelease && package_._lastRelease.version;
 
   return lastVersion && typeof package_._nextType === 'string'
-    ? semver.inc(lastVersion, package_._nextType) || undefined
+    ? semver.inc(
+        lastVersion,
+        package_._nextType as import('semver').ReleaseType,
+      ) || undefined
     : lastVersion || '1.0.0';
 };
 
 /**
- * Parse the prerelease tag from a semver version.
- * @param version - Semver version in a string format.
- * @returns preReleaseTag Version prerelease tag or null.
+ * Extract the prerelease identifier from a semver version string.
+ * @param version Semver version string
+ * @returns Prerelease identifier or null
  * @internal
  */
 export const getPreReleaseTag = (version: string): string | null => {
@@ -283,24 +295,20 @@ export const getPreReleaseTag = (version: string): string | null => {
 };
 
 /**
- * Resolve next package version on prereleases.
- *
- * Will resolve highest next version of either:
- *
- * 1. The last release for the package during this multi-release cycle
- * 2. (if tag options provided):
- * a. the highest increment of the tags array provided
- * b. the highest increment of the gitTags for the prerelease
- * @param package_ - Package object.
- * @returns Next pkg version.
+ * Resolve the next prerelease package version.
+ * Evaluates last release for the package and prerelease rules.
+ * @param package_ Package object
+ * @returns Next prerelease version or undefined
  * @internal
  */
-export const getNextPreVersion = (package_: any): string | undefined => {
+export const getNextPreVersion = (package_: Package): string | undefined => {
   // Note: this is only set is a current multi-semantic-release released
   const lastVersionForCurrentRelease =
     package_._lastRelease && package_._lastRelease.version;
 
-  const lastPreReleaseTag = getPreReleaseTag(lastVersionForCurrentRelease);
+  const lastPreReleaseTag = lastVersionForCurrentRelease
+    ? getPreReleaseTag(lastVersionForCurrentRelease)
+    : null;
   const isNewPreReleaseTag =
     lastPreReleaseTag && lastPreReleaseTag !== package_._preRelease;
 
@@ -309,26 +317,26 @@ export const getNextPreVersion = (package_: any): string | undefined => {
     : _nextPreVersionCases(
         [],
         lastVersionForCurrentRelease,
-        package_._nextType,
-        package_._preRelease,
+        (package_._nextType ?? 'patch') as import('semver').ReleaseType,
+        package_._preRelease ?? '',
       );
 };
 
 /**
- * Resolve package release type taking into account the cascading dependency update.
- * @param package_ - Package object.
- * @param bumpStrategy - Dependency resolution strategy: override, satisfy, inherit.
- * @param releaseStrategy - Release type triggered by deps updating: patch, minor, major, inherit.
- * @param ignore - Packages to ignore (to prevent infinite loops).
- * @param prefix - Dependency version prefix to be attached if `bumpStrategy='override'`. ^ | ~ | '' (defaults to empty string)
- * @returns Resolved release type.
+ * Resolve the release type considering cascading dependency updates.
+ * @param package_ Package object
+ * @param bumpStrategy Dependency resolution strategy: override, satisfy, inherit
+ * @param releaseStrategy Release type when deps are updated: patch, minor, major, inherit
+ * @param ignore Packages to ignore (prevents infinite loops)
+ * @param prefix Dependency version prefix if bumpStrategy is 'override'
+ * @returns Resolved release type or undefined
  * @internal
  */
 export const resolveReleaseType = (
-  package_: any,
+  package_: Package,
   bumpStrategy: string = 'override',
   releaseStrategy: string = 'patch',
-  ignore: any[] = [],
+  ignore: Package[] = [],
   prefix: string = '',
 ): string | undefined => {
   // NOTE This fn also updates pkg deps, so it must be invoked anyway.
@@ -361,12 +369,12 @@ export const resolveReleaseType = (
 };
 
 /**
- * Resolve next version of dependency.
- * @param currentVersion - Current dep version
- * @param nextVersion - Next release type: patch, minor, major
- * @param bumpStrategy - Resolution strategy: inherit, override, satisfy
- * @param prefix - Dependency version prefix to be attached if `bumpStrategy='override'`. ^ | ~ | '' (defaults to empty string)
- * @returns Next dependency version
+ * Resolve next dependency version according to a chosen bump strategy.
+ * @param currentVersion Current declared dependency version/range
+ * @param nextVersion Next package version to align to
+ * @param bumpStrategy Resolution strategy: inherit, override, satisfy
+ * @param prefix Dependency version prefix if bumpStrategy is 'override'
+ * @returns Next dependency version string
  * @internal
  */
 export const resolveNextVersion = (
@@ -418,21 +426,26 @@ export const resolveNextVersion = (
 };
 
 /**
- * Update pkg deps.
- * @param package_ - The package this function is being called on.
- * @returns void
+ * Update package.json dependency versions for a package about to be released.
+ * Ensures prerelease consistency and writes back the manifest when changed.
+ * @param package_ The package this function is being called on
  * @internal
  */
-export const updateManifestDeps = (package_: any): void => {
+export const updateManifestDeps = (package_: Package): void => {
   const { manifest, path } = package_;
+  if (!manifest || !manifest.__contents__) {
+    return;
+  }
   const { indent, trailingWhitespace } = recognizeFormat(manifest.__contents__);
 
   // We need to bump pkg.version for correct yarn.lock update
   // https://github.com/qiwi/multi-semantic-release/issues/58
-  manifest.version = package_._nextRelease.version || manifest.version;
+  if (package_._nextRelease?.version) {
+    manifest.version = package_._nextRelease.version;
+  }
 
   // Loop through localDeps to verify release consistency.
-  package_.localDeps.forEach((d: any) => {
+  package_.localDeps?.forEach((d: Package) => {
     // Get version of dependency.
     const release = d._nextRelease || d._lastRelease;
 
