@@ -35,7 +35,7 @@ export const multiSemanticRelease = async ({
     stdout,
   };
   const topoResult = (await topo({
-    cwd,
+    cwd: calledCwd,
     filter: ({ manifest }: { manifest: { private?: boolean } }) =>
       !options.ignorePrivate || !manifest.private,
     workspacesExtra: Array.isArray(options.ignorePackages)

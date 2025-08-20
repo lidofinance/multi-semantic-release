@@ -35,6 +35,7 @@ export const releasePackage = async (
   // This consists of:
   // - The global options (e.g. from the top level package.json)
   // - The package options (e.g. from the specific package's package.json)
+  // - Our inline plugin functions merged directly to avoid plugin loading issues
   const options = { ...packageOptions, ...inlinePlugin };
 
   // Add the package name into tagFormat.

@@ -288,7 +288,7 @@ export const getInlinePluginCreator = (
       if (typeof plugin === 'function') {
         Reflect.defineProperty(plugin, 'pluginName', {
           enumerable: true,
-          value: 'Inline plugin',
+          value: `Inline plugin [${pkg.name}]`,
           writable: false,
         });
       }

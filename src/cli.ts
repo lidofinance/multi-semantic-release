@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { exit } from 'node:process';
+import { inspect } from 'node:util';
 
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -54,7 +55,11 @@ export function executeRelease(options: ReleaseOptions = {}): void {
       exit(0);
     },
     (error) => {
-      consoleLog(`[multi-semantic-release]: ${error}`, 'Error');
+      const message =
+        error instanceof Error
+          ? error.stack || error.message
+          : inspect(error, { depth: 5 });
+      consoleLog(`[multi-semantic-release]: ${message}`, 'Error');
       exit(1);
     },
   );
