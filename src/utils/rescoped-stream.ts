@@ -22,7 +22,7 @@ export class RescopedStream extends Writable {
    * Write a message to the underlying stream, replacing the scope.
    * @param message The message to write.
    */
-  write(message: string): boolean {
+  override write(message: string): boolean {
     return this._stream.write(
       message.replace('[semantic-release]', `[${this._scope}]`),
     );

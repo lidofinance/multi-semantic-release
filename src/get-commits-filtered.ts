@@ -1,11 +1,21 @@
 import { relative } from 'node:path';
+import { env } from 'node:process';
+import type { Readable } from 'node:stream';
 
 import { execa } from 'execa';
 import gitLogParser from 'git-log-parser';
 
-import { logger } from './logger.js';
+import { logger } from './utils/logging/logger.js';
 import { cleanPath } from './utils/clean-path.js';
 import { streamToArray } from './utils/stream-to-array.js';
+
+interface GitCommit {
+  committerDate: Date;
+  gitTags: string;
+  hash: string;
+  message: string;
+  [key: string]: unknown;
+}
 
 /**
  * Retrieve the list of commits on the current branch since the commit sha associated with the last release, or all the commits of the current branch if there is no last released version.
@@ -26,7 +36,7 @@ export async function getCommitsFiltered(
   lastRelease?: string,
   nextRelease?: string,
   firstParentBranch?: string,
-): Promise<Array<any>> {
+): Promise<GitCommit[]> {
   cwd = cleanPath(cwd);
   direction = cleanPath(direction, cwd);
 
@@ -60,15 +70,15 @@ export async function getCommitsFiltered(
   const gitLogFilterQuery = [...firstParentBranchFilter, range, '--', relpath];
   const stream = gitLogParser.parse(
     { _: gitLogFilterQuery },
-    { cwd, env: process.env },
-  );
+    { cwd, env },
+  ) as Readable;
 
-  const commits = await streamToArray(stream);
+  const commits = await streamToArray<GitCommit>(stream);
 
   // Trim message and tags.
-  commits.forEach((commit: any) => {
-    commit.message = commit.message.trim();
-    commit.gitTags = commit.gitTags.trim();
+  commits.forEach((commit) => {
+    commit.message = commit.message?.trim() || '';
+    commit.gitTags = commit.gitTags?.trim() || '';
   });
 
   logger.debug('git log filter query: %o', gitLogFilterQuery);
