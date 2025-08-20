@@ -40,7 +40,7 @@ export default [
       'no-prototype-builtins': 'warn',
       'prefer-const': 'error',
       '@typescript-eslint/no-var-requires': 'error',
-      'no-console': 'warn', // CLI tool needs console
+      'no-console': 'warn',
     },
   },
   {
