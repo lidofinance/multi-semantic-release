@@ -19,6 +19,20 @@
     "clean": "rm -rf dist",
     "prepare": "git config core.hooksPath .git-hooks || echo 'Not in a git repo'"
   },
+  "homepage": "https://github.com/lidofinance/multi-semantic-release/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lidofinance/multi-semantic-release.git",
+    "directory": "./"
+  },
+  "bugs": {
+    "url": "https://github.com/lidofinance/multi-semantic-release/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public",
+    "provenance": true
+  },
   "keywords": [
     "semantic-release",
     "multi-semantic-release"
@@ -60,6 +74,9 @@
     "lodash-es": "^4.17.21",
     "semantic-release": "^24.2.7",
     "winston": "^3.17.0"
+  },
+  "resolutions": {
+    "tmp": "0.2.4"
   },
   "lint-staged": {
     "./**/*.{ts,tsx}": [
