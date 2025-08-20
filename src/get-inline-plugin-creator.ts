@@ -274,11 +274,47 @@ export const getInlinePluginCreator = (
       return result.length > 0 ? result[0] || {} : {};
     };
 
+    const success = async (
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<void> => {
+      if (
+        typeof (
+          plugins as unknown as {
+            success: (context: SemanticReleaseContext) => Promise<void>;
+          }
+        )?.success === 'function'
+      ) {
+        await plugins.success(context);
+      }
+
+      logger.debug(debugPrefix, 'success');
+    };
+
+    const fail = async (
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<void> => {
+      if (
+        typeof (
+          plugins as unknown as {
+            fail: (context: SemanticReleaseContext) => Promise<void>;
+          }
+        )?.fail === 'function'
+      ) {
+        await plugins.fail(context);
+      }
+
+      logger.debug(debugPrefix, 'fail');
+    };
+
     const inlinePlugin = {
       analyzeCommits,
       generateNotes,
       prepare,
       publish,
+      success,
+      fail,
       verifyConditions,
     };
 

@@ -40,6 +40,8 @@ export interface OptionsConfig extends BaseConfig {
 export type Logger = {
   error: (...args: unknown[]) => void;
   log: (...args: unknown[]) => void;
+  success: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
 };
 
 /**
@@ -83,6 +85,8 @@ export interface SemanticReleasePlugins {
   generateNotes(context: SemanticReleaseContext): Promise<string>;
   prepare(context: SemanticReleaseContext): Promise<unknown>;
   publish(context: SemanticReleaseContext): Promise<Record<string, unknown>[]>;
+  success(context: SemanticReleaseContext): Promise<void>;
+  fail(context: SemanticReleaseContext): Promise<void>;
 }
 
 /** Shape of generated inline plugin used to wrap per-package plugin calls */

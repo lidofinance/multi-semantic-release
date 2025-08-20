@@ -51,14 +51,29 @@ export async function getPackage(
   // We merge this ourselves because package-specific options can override global options.
   const finalOptions = { ...globalOptions, ...packageOptions };
 
+  // Sanitize user-defined plugins to avoid undefined/false entries
+  if (Array.isArray(finalOptions.plugins)) {
+    finalOptions.plugins = finalOptions.plugins.filter(Boolean);
+  }
+
   // Make a fake logger so semantic-release's get-config doesn't fail.
-  const fakeLogger: Logger = { error() {}, log() {} };
+  const fakeLoggerBase: Logger = {
+    error() {},
+    log() {},
+    success() {},
+    warn() {},
+  };
+  const fakeLogger = {
+    ...fakeLoggerBase,
+    scopeName: 'semantic-release',
+    scope: (): Logger => fakeLoggerBase,
+  };
 
   // Use semantic-release's internal config with the final options (now we have the right `options.plugins` setting) to get the plugins object and the options including defaults.
   // We need this so we can call e.g. plugins.analyzeCommit() to be able to affect the input and output of the whole set of plugins.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   const { options, plugins } = (await getConfigSemantic(
-    { cwd: directory, env, stderr, stdout },
+    { cwd: directory, env, stderr, stdout, logger: fakeLogger },
     finalOptions,
   )) as { options: OptionsConfig; plugins: SemanticReleasePlugins };
 
