@@ -77,7 +77,8 @@
     "winston": "^3.17.0"
   },
   "resolutions": {
-    "tmp": "0.2.4"
+    "tmp": "0.2.4",
+    "@semantic-release/github": "^11.0.5"
   },
   "lint-staged": {
     "./**/*.{ts,tsx}": [
