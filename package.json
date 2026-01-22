@@ -72,7 +72,7 @@
     "detect-newline": "^4.0.1",
     "execa": "^9.6.0",
     "git-log-parser": "^1.2.1",
-    "lodash-es": "^4.17.21",
+    "lodash-es": "^4.17.23",
     "semantic-release": "^24.2.7",
     "winston": "^3.17.0"
   },
