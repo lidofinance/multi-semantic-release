@@ -3,7 +3,7 @@
 import { exit } from 'node:process';
 import { inspect } from 'node:util';
 
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import chalk from 'chalk';
 
 import multisemrelPackageJson from '../package.json' with { type: 'json' };
@@ -123,6 +123,13 @@ program.exitOverride();
 try {
   program.parse();
 } catch (error) {
+  // `exitOverride()` makes commander throw on every exit — including the clean
+  // ones (`--help`, `--version`, unknown option). For those commander has
+  // already written its own output, so just propagate its exit code instead of
+  // re-printing it as a fatal error.
+  if (error instanceof CommanderError) {
+    exit(error.exitCode);
+  }
   const message = error instanceof Error ? error.message : 'Unknown error';
   consoleLog(`❌ Error: ${message}`, 'Error');
   exit(1);

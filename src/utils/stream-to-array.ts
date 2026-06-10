@@ -6,13 +6,6 @@ export function streamToArray<T = unknown>(stream: Readable): Promise<T[]> {
   }
 
   return new Promise((resolve, reject) => {
-    // stream is already ended
-    if (!stream.readable) {
-      resolve([]);
-
-      return;
-    }
-
     let array: T[] = [];
 
     function cleanup(): void {
@@ -45,7 +38,7 @@ export function streamToArray<T = unknown>(stream: Readable): Promise<T[]> {
 
     stream.on('data', onData);
     stream.on('end', onEnd);
-    stream.on('error', onEnd);
+    stream.on('error', onError);
     stream.on('close', onClose);
   });
 }

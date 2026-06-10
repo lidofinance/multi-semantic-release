@@ -34,6 +34,8 @@ export const multiSemanticRelease = async ({
     stderr,
     stdout,
   };
+  // `@semrel-extra/topo` ships no types, so the call resolves to `any`.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   const topoResult = (await topo({
     cwd: calledCwd,
     filter: ({ manifest }: { manifest: { private?: boolean } }) =>
@@ -57,10 +59,20 @@ export const multiSemanticRelease = async ({
     `Running with options: ${chalk.yellow(JSON.stringify(options))}`,
   );
 
-  // Load packages from paths
-  const packages = await Promise.all(
-    paths.map((path) => getPackage(path, multiContext)),
-  );
+  // Load packages from paths. `sequentialInit` loads them one-by-one to avoid
+  // concurrent initialization collisions (e.g. shared git/lockfile access);
+  // otherwise they are loaded in parallel for speed.
+  let packages: Package[];
+  if (options.sequentialInit) {
+    packages = [];
+    for (const path of paths) {
+      packages.push(await getPackage(path, multiContext));
+    }
+  } else {
+    packages = await Promise.all(
+      paths.map((path) => getPackage(path, multiContext)),
+    );
+  }
 
   packages.forEach((pkg) => {
     // Once we load all the packages we can find their cross refs
@@ -82,11 +94,7 @@ export const multiSemanticRelease = async ({
   );
 
   // Release all packages.
-  const createInlinePlugin = getInlinePluginCreator(
-    packages,
-    multiContext,
-    options,
-  );
+  const createInlinePlugin = getInlinePluginCreator(multiContext, options);
 
   const released = await queue.reduce(
     async (accPromise: Promise<number>, packageName: string) => {
