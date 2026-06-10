@@ -323,7 +323,7 @@ export const getNextPreVersion = (package_: Package): string | undefined => {
   return isNewPreReleaseTag || !lastVersionForCurrentRelease
     ? `1.0.0-${package_._preRelease}.1`
     : _nextPreVersionCases(
-        [],
+        package_._tags ?? [],
         lastVersionForCurrentRelease,
         (package_._nextType ?? 'patch') as import('semver').ReleaseType,
         package_._preRelease ?? '',
