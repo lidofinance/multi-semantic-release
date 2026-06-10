@@ -87,6 +87,15 @@ export const getInlinePluginCreator = (
       pkg._preRelease = context.branch.prerelease || null;
       pkg._branch = context.branch.name;
 
+      // Capture this package's already-released versions (from branch tags) so
+      // prerelease bumping can pick the next version above any existing tag and
+      // avoid collisions. Gated by `deps.pullTagsForPrerelease` (default on).
+      if (options.deps?.pullTagsForPrerelease !== false) {
+        pkg._tags = (context.branch.tags ?? [])
+          .map((t) => t.version)
+          .filter((v): v is string => Boolean(v));
+      }
+
       // Filter commits by directory.
       const firstParentBranch = options.firstParent
         ? context.branch.name

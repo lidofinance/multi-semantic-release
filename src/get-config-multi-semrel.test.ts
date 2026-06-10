@@ -24,6 +24,7 @@ describe('getConfigMultiSemantic', () => {
       bump: 'override',
       release: 'patch',
       prefix: '',
+      pullTagsForPrerelease: true,
     });
   });
 
@@ -40,6 +41,7 @@ describe('getConfigMultiSemantic', () => {
       bump: 'satisfy',
       release: 'patch',
       prefix: '~',
+      pullTagsForPrerelease: true,
     });
     expect('deps.bump' in options).toBe(false);
     expect('deps.prefix' in options).toBe(false);

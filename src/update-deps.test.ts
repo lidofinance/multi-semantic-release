@@ -114,6 +114,37 @@ describe('getNextPreVersion', () => {
       ),
     ).toBe('1.1.0-alpha.1');
   });
+
+  // Regression (HIGH #5): when prerelease tags exist that are AHEAD of
+  // `_lastRelease` (e.g. parallel prerelease lines or re-tagging), the next
+  // version must be bumped from the highest tag to avoid collisions — not
+  // blindly from `_lastRelease`. Previously tags were ignored (`[]` hardcoded),
+  // so this returned 1.0.0-alpha.3 and could clash with the existing alpha.5.
+  it('bumps from the highest existing prerelease tag, not just _lastRelease', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '1.0.0-alpha.2' },
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['1.0.0-alpha.1', '1.0.0-alpha.2', '1.0.0-alpha.5'],
+        }),
+      ),
+    ).toBe('1.0.0-alpha.6');
+  });
+
+  it('still bumps from _lastRelease when no higher tag exists', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '1.0.0-alpha.2' },
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['1.0.0-alpha.1', '1.0.0-alpha.2'],
+        }),
+      ),
+    ).toBe('1.0.0-alpha.3');
+  });
 });
 
 describe('resolveReleaseType', () => {

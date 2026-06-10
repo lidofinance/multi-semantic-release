@@ -92,6 +92,22 @@ describe('getInlinePluginCreator', () => {
     expect(pkg._nextType).toBe('minor');
   });
 
+  // Wiring for HIGH #5: branch tags are captured so prerelease bumping can use them.
+  it('analyzeCommits captures branch tag versions into pkg._tags', async () => {
+    const context = makeContext({
+      branch: {
+        name: 'develop',
+        prerelease: 'alpha',
+        tags: [
+          { version: '1.0.0-alpha.1', gitTag: 'a@1.0.0-alpha.1' },
+          { version: '1.0.0-alpha.2', gitTag: 'a@1.0.0-alpha.2' },
+        ],
+      },
+    });
+    await create().analyzeCommits({}, context);
+    expect(pkg._tags).toEqual(['1.0.0-alpha.1', '1.0.0-alpha.2']);
+  });
+
   it('generateNotes injects the package name into the heading', async () => {
     const notes = await create().generateNotes({}, makeContext());
     expect(plugins.generateNotes).toHaveBeenCalled();
