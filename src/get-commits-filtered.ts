@@ -41,7 +41,9 @@ export async function getCommitsFiltered(
   direction = cleanPath(direction, cwd);
 
   // target must be inside and different than cwd.
-  if (direction.indexOf(cwd) !== 0) {
+  // Use a separator-aware check so a sibling like `<cwd>2` isn't treated as
+  // being inside `<cwd>` (a plain prefix match would accept it).
+  if (direction !== cwd && !direction.startsWith(`${cwd}/`)) {
     throw new Error('dir: Must be inside cwd: ' + direction);
   }
 
