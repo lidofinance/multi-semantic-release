@@ -74,6 +74,7 @@ export const getConfigMultiSemantic = async (
       bump: 'override',
       prefix: '',
       release: 'patch',
+      pullTagsForPrerelease: true,
     },
     dryRun: undefined,
     firstParent: false,
@@ -98,6 +99,8 @@ export const getConfigMultiSemantic = async (
     cliDeps.release = cliOptions['deps.release'];
   if (cliOptions['deps.prefix'] != null)
     cliDeps.prefix = cliOptions['deps.prefix'];
+  if (cliOptions['deps.pullTagsForPrerelease'] != null)
+    cliDeps.pullTagsForPrerelease = cliOptions['deps.pullTagsForPrerelease'];
 
   if (Object.keys(cliDeps).length > 0) {
     normalizedCliOptions.deps = {
@@ -108,6 +111,7 @@ export const getConfigMultiSemantic = async (
   delete normalizedCliOptions['deps.bump'];
   delete normalizedCliOptions['deps.release'];
   delete normalizedCliOptions['deps.prefix'];
+  delete normalizedCliOptions['deps.pullTagsForPrerelease'];
 
   // Finally merge CLI options last so they always win
   return mergeConfig(options, normalizedCliOptions);

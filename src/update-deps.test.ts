@@ -114,6 +114,37 @@ describe('getNextPreVersion', () => {
       ),
     ).toBe('1.1.0-alpha.1');
   });
+
+  // Regression (HIGH #5): when prerelease tags exist that are AHEAD of
+  // `_lastRelease` (e.g. parallel prerelease lines or re-tagging), the next
+  // version must be bumped from the highest tag to avoid collisions — not
+  // blindly from `_lastRelease`. Previously tags were ignored (`[]` hardcoded),
+  // so this returned 1.0.0-alpha.3 and could clash with the existing alpha.5.
+  it('bumps from the highest existing prerelease tag, not just _lastRelease', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '1.0.0-alpha.2' },
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['1.0.0-alpha.1', '1.0.0-alpha.2', '1.0.0-alpha.5'],
+        }),
+      ),
+    ).toBe('1.0.0-alpha.6');
+  });
+
+  it('still bumps from _lastRelease when no higher tag exists', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '1.0.0-alpha.2' },
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['1.0.0-alpha.1', '1.0.0-alpha.2'],
+        }),
+      ),
+    ).toBe('1.0.0-alpha.3');
+  });
 });
 
 describe('resolveReleaseType', () => {
@@ -163,6 +194,34 @@ describe('resolveReleaseType', () => {
     });
 
     expect(resolveReleaseType(consumer, 'override', 'inherit')).toBe('minor');
+  });
+
+  // Regression (HIGH): the dependency cascade must propagate across MULTIPLE
+  // levels. a -> b -> c: when `a` changes, `b` gets a patch (dep changed), and
+  // `c` (depends on `b`) must also get a patch. Previously the severity check
+  // compared against a 'patch' floor with strict `>`, so a patch-level cascade
+  // stopped at the first level (`patch > patch` is false) and `c` was skipped.
+  it('propagates a patch cascade across multiple dependency levels', () => {
+    const a = mk({
+      name: 'a',
+      _lastRelease: { version: '1.0.0' },
+      _nextType: 'minor',
+    });
+    const b = mk({
+      name: 'b',
+      _lastRelease: { version: '1.0.0' },
+      manifest: { name: 'b', dependencies: { a: '^1.0.0' } },
+      localDeps: [a],
+    });
+    const c = mk({
+      name: 'c',
+      _lastRelease: { version: '1.0.0' },
+      manifest: { name: 'c', dependencies: { b: '^1.0.0' } },
+      localDeps: [b],
+    });
+
+    // c depends on b, which is patch-released because a changed → c must release.
+    expect(resolveReleaseType(c, 'override', 'patch')).toBe('patch');
   });
 
   // Regression (HIGH): a never-released package must NOT be force-released just

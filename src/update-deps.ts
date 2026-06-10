@@ -163,10 +163,15 @@ const getDependentRelease = (
         false,
       );
 
+      // Keep the highest release type across deps. When nothing has been
+      // accumulated yet, treat the baseline as below 'patch' (-1) so a
+      // patch-level cascade still propagates — otherwise `patch > patch` is
+      // false and multi-level cascades stop after the first level.
+      const currentRank = releaseType ? severityOrder.indexOf(releaseType) : -1;
+
       return requireRelease &&
         nextType &&
-        severityOrder.indexOf(nextType) >
-          severityOrder.indexOf(releaseType || 'patch')
+        severityOrder.indexOf(nextType) > currentRank
         ? nextType
         : releaseType;
     }, undefined);
@@ -323,7 +328,7 @@ export const getNextPreVersion = (package_: Package): string | undefined => {
   return isNewPreReleaseTag || !lastVersionForCurrentRelease
     ? `1.0.0-${package_._preRelease}.1`
     : _nextPreVersionCases(
-        [],
+        package_._tags ?? [],
         lastVersionForCurrentRelease,
         (package_._nextType ?? 'patch') as import('semver').ReleaseType,
         package_._preRelease ?? '',

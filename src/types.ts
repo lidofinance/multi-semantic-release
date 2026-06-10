@@ -52,6 +52,7 @@ export interface SemanticReleaseContext {
   branch: {
     name: string;
     prerelease?: string;
+    tags?: { version?: string; gitTag?: string }[];
   };
   commits: unknown[];
   cwd: string;
@@ -76,6 +77,8 @@ export interface DependencyConfig {
   bump: string;
   release: string;
   prefix: string;
+  /** Consider existing git tags when computing a dependency's next prerelease version. */
+  pullTagsForPrerelease?: boolean;
 }
 
 /** Contract for the semantic-release plugin hooks used by this project */
@@ -137,6 +140,7 @@ export type Package = {
     gitTag?: string;
   }; // The next release object for this cycle.
   _preRelease?: string | null;
+  _tags?: string[]; // Known released versions for this package (from git tags), used to pick the next prerelease without collisions.
   _branch?: string; // The branch name for the package.
   _nextType?: string | undefined; // The next release type for the package, e.g. "major", "minor", "patch", or "none".
   _analyzed?: boolean; // Whether the package has been analyzed for commits.
