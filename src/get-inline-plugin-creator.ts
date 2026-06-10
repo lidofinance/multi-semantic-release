@@ -16,14 +16,12 @@ import type {
 /**
  * Get an inline plugin creator for a multirelease.
  * This is caused once per multirelease and returns a function which should be called once per package within the release.
- * @param _packages List of packages (not used directly)
  * @param multiContext - The multi-semantic-release context.
  * @param options CLI/config options that affect behavior
  * @returns A function that creates an inline package.
  * @internal
  */
 export const getInlinePluginCreator = (
-  _packages: Package[],
   multiContext: MultiContext,
   options: OptionsConfig,
 ): ((pkg: Package) => InlineSemanticReleasePlugin) => {
@@ -174,10 +172,13 @@ export const getInlinePluginCreator = (
       ) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-          context.lastRelease.gitHead = getTagHead(context.lastRelease.gitTag, {
-            cwd: context.cwd,
-            env: context.env,
-          }) as string;
+          context.lastRelease.gitHead = (await getTagHead(
+            context.lastRelease.gitTag,
+            {
+              cwd: context.cwd,
+              env: context.env,
+            },
+          )) as string;
         } catch {
           // Ignore getTagHead errors
         }

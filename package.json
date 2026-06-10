@@ -10,12 +10,14 @@
     "build": "tsc && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
-    "format": "prettier --write src/**/*.ts",
-    "format:check": "prettier --check src/**/*.ts",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "types": "tsc --noEmit",
-    "test": "echo 'No tests yet'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist",
     "prepare": "git config core.hooksPath .git-hooks || echo 'Not in a git repo'"
   },
@@ -39,50 +41,49 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.10.0"
   },
   "files": [
     "dist/**/*"
   ],
   "devDependencies": {
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
-    "@commitlint/prompt": "^19.8.1",
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@commitlint/prompt": "^21.0.2",
+    "@eslint/js": "^10.0.1",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.1.0",
-    "@types/semantic-release": "^21.1.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
-    "eslint": "^9.32.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "10",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.3",
-    "lint-staged": "^16.1.5",
+    "lint-staged": "17",
     "prettier": "^3.6.2",
     "tsx": "^4.20.3",
-    "typescript": "^5.9.2"
+    "typescript": "6",
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "@semrel-extra/topo": "^1.14.1",
     "@types/git-log-parser": "^1.2.3",
     "@types/semver": "^7.7.0",
     "chalk": "^5.4.1",
-    "commander": "^14.0.0",
+    "commander": "^15.0.0",
     "cosmiconfig": "^9.0.0",
     "detect-indent": "^7.0.1",
     "detect-newline": "^4.0.1",
     "execa": "^9.6.0",
     "git-log-parser": "^1.2.1",
     "lodash-es": "^4.17.23",
-    "semantic-release": "^24.2.7",
+    "semantic-release": "^25.0.5",
+    "semver": "^7.7.1",
     "winston": "^3.17.0"
   },
-  "resolutions": {
-    "tmp": "0.2.4",
-    "@semantic-release/github": "^11.0.5"
-  },
   "lint-staged": {
-    "./**/*.{ts,tsx}": [
-      "eslint --ignore-path .gitignore --max-warnings=0"
+    "src/**/*.{ts,tsx}": [
+      "eslint --max-warnings=0"
     ],
     "./**/*.{ts,tsx,css,md,json}": [
       "prettier --write"

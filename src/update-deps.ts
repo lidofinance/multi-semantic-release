@@ -3,7 +3,6 @@ import { writeFileSync } from 'node:fs';
 import { isEqual, isObject, transform } from 'lodash-es';
 import semver from 'semver';
 
-import getManifest from './utils/get-manifest.js';
 import { getHighestVersion, getLatestVersion } from './utils/get-version.js';
 import { recognizeFormat } from './utils/recognize-format.js';
 import type { Manifest, Package } from './types.js';
@@ -90,7 +89,6 @@ const getDependentRelease = (
   const severityOrder = ['patch', 'minor', 'major'];
   const { localDeps, manifest } = package_;
   if (!manifest) return undefined;
-  const lastVersion = package_._lastRelease && package_._lastRelease.version;
   const {
     dependencies = {},
     devDependencies = {},
@@ -153,10 +151,16 @@ const getDependentRelease = (
           p._lastRelease && p._lastRelease.version;
 
       // 3. And this change should correspond to the manifest updating rule.
+      //    A dependency-driven release is required only when a dependency
+      //    version actually changed in one of the manifest scopes. (A package's
+      //    own first release is decided earlier from its commit history via
+      //    `_nextType`, so we must not force one here just because it has never
+      //    been released — that bumped every package with a local dep on a first
+      //    run regardless of whether anything changed.)
       const requireRelease = scopes.reduce(
         (result: boolean, scope: Record<string, string>) =>
           bumpDependency(scope, p.name, nextVersion) || result,
-        !lastVersion,
+        false,
       );
 
       return requireRelease &&
@@ -224,7 +228,11 @@ const auditManifestChanges = (
   path: string,
 ): boolean => {
   const debugPrefix = `[${actualManifest.name}]`;
-  const oldManifest = getManifest(path);
+  // Diff against the manifest as it was originally read from disk (captured in
+  // the non-enumerable `__contents__`) rather than re-reading the file.
+  const oldManifest = (
+    actualManifest.__contents__ ? JSON.parse(actualManifest.__contents__) : {}
+  ) as Manifest;
   const depScopes = [
     'dependencies',
     'devDependencies',

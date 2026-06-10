@@ -13,18 +13,28 @@ export class RescopedStream extends Writable {
   private _scope: string;
 
   constructor(stream: Writable, scope: string) {
-    super();
+    super({ decodeStrings: false });
     this._stream = stream;
     this._scope = scope;
   }
 
   /**
-   * Write a message to the underlying stream, replacing the scope.
-   * @param message The message to write.
+   * Forward a chunk to the underlying stream, rewriting the scope. Implemented
+   * as `_write` (rather than overriding `write`) so the base `Writable` keeps
+   * honoring the encoding/callback/backpressure contract.
+   * @param chunk The chunk to write.
+   * @param _encoding Source encoding (unused — we forward as text).
+   * @param callback Signals completion (or error) to the stream machinery.
    */
-  override write(message: string): boolean {
-    return this._stream.write(
-      message.replace('[semantic-release]', `[${this._scope}]`),
+  override _write(
+    chunk: unknown,
+    _encoding: string,
+    callback: (error?: Error | null) => void,
+  ): void {
+    const message = String(chunk).replace(
+      '[semantic-release]',
+      `[${this._scope}]`,
     );
+    this._stream.write(message, callback);
   }
 }
