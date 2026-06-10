@@ -196,6 +196,34 @@ describe('resolveReleaseType', () => {
     expect(resolveReleaseType(consumer, 'override', 'inherit')).toBe('minor');
   });
 
+  // Regression (HIGH): the dependency cascade must propagate across MULTIPLE
+  // levels. a -> b -> c: when `a` changes, `b` gets a patch (dep changed), and
+  // `c` (depends on `b`) must also get a patch. Previously the severity check
+  // compared against a 'patch' floor with strict `>`, so a patch-level cascade
+  // stopped at the first level (`patch > patch` is false) and `c` was skipped.
+  it('propagates a patch cascade across multiple dependency levels', () => {
+    const a = mk({
+      name: 'a',
+      _lastRelease: { version: '1.0.0' },
+      _nextType: 'minor',
+    });
+    const b = mk({
+      name: 'b',
+      _lastRelease: { version: '1.0.0' },
+      manifest: { name: 'b', dependencies: { a: '^1.0.0' } },
+      localDeps: [a],
+    });
+    const c = mk({
+      name: 'c',
+      _lastRelease: { version: '1.0.0' },
+      manifest: { name: 'c', dependencies: { b: '^1.0.0' } },
+      localDeps: [b],
+    });
+
+    // c depends on b, which is patch-released because a changed → c must release.
+    expect(resolveReleaseType(c, 'override', 'patch')).toBe('patch');
+  });
+
   // Regression (HIGH): a never-released package must NOT be force-released just
   // because it has a local dep — only an actual version change should trigger
   // one. Here the dep is releasing but the consumer already references its next
