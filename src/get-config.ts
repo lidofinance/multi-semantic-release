@@ -17,11 +17,10 @@ const CONFIG_FILES: string[] = [
 ];
 
 /**
- * Get the release configuration options for a given directory.
- *
- * @param cwd - The directory to search.
- * @returns The found configuration object, or an empty object if none found.
- * @internal
+ * Loads semantic‑release configuration for a directory using cosmiconfig.
+ * Returns the found config object or an empty object when none.
+ * @param cwd Directory to start the search
+ * @returns Loaded configuration or an empty object
  */
 export async function getConfig(cwd: string): Promise<Record<string, unknown>> {
   const config = await cosmiconfig(CONFIG_NAME, {
@@ -29,5 +28,5 @@ export async function getConfig(cwd: string): Promise<Record<string, unknown>> {
     searchPlaces: CONFIG_FILES,
   }).search(cwd);
 
-  return config ? config.config : {};
+  return config ? (config.config as Record<string, unknown>) : {};
 }

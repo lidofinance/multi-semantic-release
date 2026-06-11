@@ -38,3 +38,8 @@ yarn-error.log*
 # Temporary files
 .tmp/
 .temp/
+coverage/
+
+# AI
+AGENTS.md
+CLAUDE.md

@@ -2,24 +2,29 @@
 import { getTagHead } from 'semantic-release/lib/git.js';
 
 import { getCommitsFiltered } from './get-commits-filtered.js';
-import { logger } from './logger.js';
+import { logger } from './utils/logging/logger.js';
 import { resolveReleaseType, updateManifestDeps } from './update-deps.js';
-import type { MultiContext, Package } from './types.js';
+import type {
+  MultiContext,
+  Package,
+  SemanticReleaseContext,
+  OptionsConfig,
+  SemanticReleasePlugins,
+  InlineSemanticReleasePlugin,
+} from './types.js';
 
 /**
  * Get an inline plugin creator for a multirelease.
  * This is caused once per multirelease and returns a function which should be called once per package within the release.
- * @param packages - The multi-semantic-release context.
  * @param multiContext - The multi-semantic-release context.
- * @param options - argv options
+ * @param options CLI/config options that affect behavior
  * @returns A function that creates an inline package.
  * @internal
  */
-export function getInlinePluginCreator(
-  packages: Package[],
+export const getInlinePluginCreator = (
   multiContext: MultiContext,
-  options: Record<string, any>,
-) {
+  options: OptionsConfig,
+): ((pkg: Package) => InlineSemanticReleasePlugin) => {
   const { cwd } = multiContext;
 
   /**
@@ -29,8 +34,10 @@ export function getInlinePluginCreator(
    * @returns A semantic-release inline plugin containing plugin step functions.
    * @internal
    */
-  function createInlinePlugin(pkg: Package): Record<string, Function> {
-    const { dir, name, plugins } = pkg;
+  function createInlinePlugin(pkg: Package): InlineSemanticReleasePlugin {
+    const { dir, name, plugins } = pkg as Package & {
+      plugins: SemanticReleasePlugins;
+    };
     const debugPrefix = `[${name}]`;
 
     /**
@@ -40,18 +47,21 @@ export function getInlinePluginCreator(
      * @internal
      */
     const verifyConditions = async (
-      pluginOptions: any,
-      context: any,
-    ): Promise<any> => {
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<unknown> => {
       // Restore context for plugins that does not rely on parsed opts.
-      Object.assign(context.options, context.options._pkgOptions);
+      if (context.options._pkgOptions) {
+        Object.assign(context.options, context.options._pkgOptions);
+      }
 
       // And bind the actual logger.
-      Object.assign(pkg.fakeLogger, context.logger);
+      if (pkg.fakeLogger) {
+        Object.assign(pkg.fakeLogger, context.logger);
+      }
 
       const result = await plugins.verifyConditions(context);
 
-      // @ts-expect-error Property '_ready' does not exist on type 'Package'
       pkg._ready = true;
 
       logger.debug(debugPrefix, 'verified conditions');
@@ -71,11 +81,20 @@ export function getInlinePluginCreator(
      * @internal
      */
     const analyzeCommits = async (
-      pluginOptions: any,
-      context: any,
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
     ): Promise<string | null> => {
       pkg._preRelease = context.branch.prerelease || null;
       pkg._branch = context.branch.name;
+
+      // Capture this package's already-released versions (from branch tags) so
+      // prerelease bumping can pick the next version above any existing tag and
+      // avoid collisions. Gated by `deps.pullTagsForPrerelease` (default on).
+      if (options.deps?.pullTagsForPrerelease !== false) {
+        pkg._tags = (context.branch.tags ?? [])
+          .map((t) => t.version)
+          .filter((v): v is string => Boolean(v));
+      }
 
       // Filter commits by directory.
       const firstParentBranch = options.firstParent
@@ -87,8 +106,8 @@ export function getInlinePluginCreator(
       context.commits = await getCommitsFiltered(
         cwd,
         dir,
-        context.lastRelease ? context.lastRelease.gitHead : undefined,
-        context.nextRelease ? context.nextRelease.gitHead : undefined,
+        context.lastRelease?.gitHead,
+        context.nextRelease?.gitHead,
         firstParentBranch,
       );
 
@@ -96,19 +115,20 @@ export function getInlinePluginCreator(
       pkg._lastRelease = context.lastRelease;
 
       // Set nextType for package from plugins.
-      pkg._nextType = await plugins.analyzeCommits(context);
+      pkg._nextType = (await plugins.analyzeCommits(context)) || undefined;
 
       pkg._analyzed = true;
 
       // Make sure type is "patch" if the package has any deps that have been changed.
-      // @ts-expect-error Type 'undefined' is not assignable to type 'string'.
-      pkg._nextType = resolveReleaseType(
-        pkg,
-        options.deps.bump,
-        options.deps.release,
-        [],
-        options.deps.prefix,
-      );
+      if (options.deps) {
+        pkg._nextType = resolveReleaseType(
+          pkg,
+          options.deps.bump,
+          options.deps.release,
+          [],
+          options.deps.prefix,
+        );
+      }
 
       logger.debug(debugPrefix, 'commits analyzed');
       logger.debug(debugPrefix, `release type: ${pkg._nextType}`);
@@ -141,8 +161,8 @@ export function getInlinePluginCreator(
      * @internal
      */
     const generateNotes = async (
-      pluginOptions: any,
-      context: any,
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
     ): Promise<string> => {
       // Set nextRelease for package.
       pkg._nextRelease = context.nextRelease;
@@ -155,15 +175,22 @@ export function getInlinePluginCreator(
 
       // get SHA of lastRelease if not already there (should have been done by Semantic Release...)
       if (
-        context.lastRelease &&
-        context.lastRelease.gitTag &&
+        context.lastRelease?.gitTag &&
         (!context.lastRelease.gitHead ||
           context.lastRelease.gitHead === context.lastRelease.gitTag)
       ) {
-        context.lastRelease.gitHead = getTagHead(context.lastRelease.gitTag, {
-          cwd: context.cwd,
-          env: context.env,
-        });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+          context.lastRelease.gitHead = (await getTagHead(
+            context.lastRelease.gitTag,
+            {
+              cwd: context.cwd,
+              env: context.env,
+            },
+          )) as string;
+        } catch {
+          // Ignore getTagHead errors
+        }
       }
 
       // Filter commits by directory (and release range)
@@ -176,8 +203,8 @@ export function getInlinePluginCreator(
       context.commits = await getCommitsFiltered(
         cwd,
         dir,
-        context.lastRelease ? context.lastRelease.gitHead : undefined,
-        context.nextRelease ? context.nextRelease.gitHead : undefined,
+        context.lastRelease?.gitHead,
+        context.nextRelease?.gitHead,
         firstParentBranch,
       );
 
@@ -193,13 +220,14 @@ export function getInlinePluginCreator(
       }
 
       // If it has upgrades add an upgrades section.
-      const upgrades = pkg.localDeps?.filter((d: any) => d._nextRelease);
+      const upgrades = pkg.localDeps?.filter((d: Package) => d._nextRelease);
 
       if (upgrades && upgrades.length > 0) {
         notes.push(`### Dependencies`);
 
         const bullets = upgrades.map(
-          (d: any) => `* **${d.name}:** upgraded to ${d._nextRelease.version}`,
+          (d: Package) =>
+            `* **${d.name}:** upgraded to ${d._nextRelease?.version}`,
         );
 
         notes.push(bullets.join('\n'));
@@ -211,7 +239,10 @@ export function getInlinePluginCreator(
       return notes.join('\n\n');
     };
 
-    const prepare = async (pluginOptions: any, context: any): Promise<any> => {
+    const prepare = async (
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<unknown> => {
       updateManifestDeps(pkg);
 
       pkg._depsUpdated = true;
@@ -226,8 +257,8 @@ export function getInlinePluginCreator(
       context.commits = await getCommitsFiltered(
         cwd,
         dir,
-        context.lastRelease ? context.lastRelease.gitHead : undefined,
-        context.nextRelease ? context.nextRelease.gitHead : undefined,
+        context.lastRelease?.gitHead,
+        context.nextRelease?.gitHead,
         firstParentBranch,
       );
 
@@ -241,16 +272,50 @@ export function getInlinePluginCreator(
     };
 
     const publish = async (
-      pluginOptions: any,
-      context: any,
-    ): Promise<Record<string, any>> => {
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<Record<string, unknown>> => {
       const result = await plugins.publish(context);
 
       pkg._published = true;
 
       logger.debug(debugPrefix, 'published');
 
-      return result.length > 0 ? result[0] : {};
+      return result.length > 0 ? result[0] || {} : {};
+    };
+
+    const success = async (
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<void> => {
+      if (
+        typeof (
+          plugins as unknown as {
+            success: (context: SemanticReleaseContext) => Promise<void>;
+          }
+        )?.success === 'function'
+      ) {
+        await plugins.success(context);
+      }
+
+      logger.debug(debugPrefix, 'success');
+    };
+
+    const fail = async (
+      _pluginOptions: unknown,
+      context: SemanticReleaseContext,
+    ): Promise<void> => {
+      if (
+        typeof (
+          plugins as unknown as {
+            fail: (context: SemanticReleaseContext) => Promise<void>;
+          }
+        )?.fail === 'function'
+      ) {
+        await plugins.fail(context);
+      }
+
+      logger.debug(debugPrefix, 'fail');
     };
 
     const inlinePlugin = {
@@ -258,18 +323,22 @@ export function getInlinePluginCreator(
       generateNotes,
       prepare,
       publish,
+      success,
+      fail,
       verifyConditions,
     };
 
     // Add labels for logs.
-    Object.keys(inlinePlugin).forEach((type) =>
-      // @ts-expect-error Element implicitly has an 'any' type
-      Reflect.defineProperty(inlinePlugin[type], 'pluginName', {
-        enumerable: true,
-        value: 'Inline plugin',
-        writable: false,
-      }),
-    );
+    Object.keys(inlinePlugin).forEach((type) => {
+      const plugin = inlinePlugin[type as keyof typeof inlinePlugin];
+      if (typeof plugin === 'function') {
+        Reflect.defineProperty(plugin, 'pluginName', {
+          enumerable: true,
+          value: `Inline plugin [${pkg.name}]`,
+          writable: false,
+        });
+      }
+    });
 
     logger.debug(debugPrefix, 'inlinePlugin created');
 
@@ -278,4 +347,4 @@ export function getInlinePluginCreator(
 
   // Return creator function.
   return createInlinePlugin;
-}
+};
