@@ -2,7 +2,7 @@ import { cosmiconfig } from 'cosmiconfig';
 import { castArray } from 'lodash-es';
 
 import { mergeConfig } from './utils/merge-config.js';
-import type { ReleaseOptions } from './types.js';
+import type { DependencyConfig, ReleaseOptions } from './types.js';
 
 /**
  * Loads and merges multi‑semantic‑release configuration.
@@ -60,7 +60,9 @@ export const getConfigMultiSemantic = async (
       Promise.resolve({}),
     );
 
-    options = mergeConfig(options, extendedOptions);
+    // The project's own config must win over what it extends from
+    // (same semantics as ESLint/tsconfig/semantic-release `extends`).
+    options = mergeConfig(extendedOptions, options);
   }
 
   // Set default options values if not defined yet
@@ -72,6 +74,7 @@ export const getConfigMultiSemantic = async (
       bump: 'override',
       prefix: '',
       release: 'patch',
+      pullTagsForPrerelease: true,
     },
     dryRun: undefined,
     firstParent: false,
@@ -85,7 +88,31 @@ export const getConfigMultiSemantic = async (
 
   options = mergeConfig(defaultOptions, options);
 
+  // Commander emits `--deps.bump`/`--deps.release`/`--deps.prefix` as flat,
+  // dot-notation keys (e.g. `{ 'deps.bump': 'override' }`) rather than a nested
+  // `deps` object. Fold them into `deps` so mergeConfig (and the consumers that
+  // read `options.deps.bump`) actually see CLI overrides.
+  const normalizedCliOptions: ReleaseOptions = { ...cliOptions };
+  const cliDeps: Partial<DependencyConfig> = {};
+  if (cliOptions['deps.bump'] != null) cliDeps.bump = cliOptions['deps.bump'];
+  if (cliOptions['deps.release'] != null)
+    cliDeps.release = cliOptions['deps.release'];
+  if (cliOptions['deps.prefix'] != null)
+    cliDeps.prefix = cliOptions['deps.prefix'];
+  if (cliOptions['deps.pullTagsForPrerelease'] != null)
+    cliDeps.pullTagsForPrerelease = cliOptions['deps.pullTagsForPrerelease'];
+
+  if (Object.keys(cliDeps).length > 0) {
+    normalizedCliOptions.deps = {
+      ...cliOptions.deps,
+      ...cliDeps,
+    } as DependencyConfig;
+  }
+  delete normalizedCliOptions['deps.bump'];
+  delete normalizedCliOptions['deps.release'];
+  delete normalizedCliOptions['deps.prefix'];
+  delete normalizedCliOptions['deps.pullTagsForPrerelease'];
+
   // Finally merge CLI options last so they always win
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  return mergeConfig(options, cliOptions);
+  return mergeConfig(options, normalizedCliOptions);
 };
