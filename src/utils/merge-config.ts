@@ -1,10 +1,8 @@
 import { castArray, pickBy } from 'lodash-es';
 
-import type { ReleaseOptions, DependencyConfig } from '../types.js';
-
 export const mergeConfig = (
   a: Record<string, unknown>,
-  b: ReleaseOptions,
+  b: Record<string, unknown>,
 ): Record<string, unknown> => {
   return {
     ...a,
@@ -12,8 +10,8 @@ export const mergeConfig = (
     ...pickBy(b, (option) => option != null),
     // Treat nested objects differently as otherwise we'll loose undefined keys
     deps: {
-      ...((a.deps as DependencyConfig) || {}),
-      ...pickBy((b.deps as DependencyConfig) || {}, (option) => option != null),
+      ...(a.deps ?? {}),
+      ...pickBy(b.deps ?? {}, (option) => option != null),
     },
     // Treat arrays differently by merging them
     ignorePackages: [

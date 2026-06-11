@@ -16,7 +16,9 @@ export interface FileFormat {
  */
 export function recognizeFormat(contents: string): FileFormat {
   return {
-    indent: detectIndent(contents).indent,
+    // Fall back to 2-space indent when detection fails (empty string would
+    // otherwise minify the rewritten JSON onto a single line).
+    indent: detectIndent(contents).indent || 2,
     trailingWhitespace: detectNewline(contents) || '',
   };
 }
