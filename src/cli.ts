@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { exit } from 'node:process';
+import process, { exit } from 'node:process';
+import { setTimeout } from 'node:timers';
 import { inspect } from 'node:util';
 
 import { Command, CommanderError } from 'commander';
@@ -13,6 +14,15 @@ import { multiSemanticRelease } from './multi-semantic-release.js';
 import { LOGS_APPNAME } from './constants.js';
 import { logger, consoleLog } from './utils/logging/index.js';
 import type { ReleaseOptions } from './types.js';
+
+// Exit via `exitCode` (not `exit()`) so Node flushes piped stdout/stderr —
+// a sync exit drops the last package's release notes. Force-exit only if a
+// stray handle keeps the loop alive.
+function requestExit(code: number): void {
+  process.exitCode = code;
+  const forceExit = setTimeout(() => exit(code), 10_000);
+  forceExit.unref();
+}
 
 /**
  * CLI entrypoint: runs multi‑semantic‑release with provided options.
@@ -52,7 +62,7 @@ export function executeRelease(options: ReleaseOptions = {}): void {
   multiSemanticRelease({ cliOptions: options }).then(
     () => {
       consoleLog('✅ Release completed successfully!', 'Success');
-      exit(0);
+      requestExit(0);
     },
     (error) => {
       const message =
@@ -60,7 +70,7 @@ export function executeRelease(options: ReleaseOptions = {}): void {
           ? error.stack || error.message
           : inspect(error, { depth: 5 });
       consoleLog(`[multi-semantic-release]: ${message}`, 'Error');
-      exit(1);
+      requestExit(1);
     },
   );
 }
@@ -128,9 +138,10 @@ try {
   // already written its own output, so just propagate its exit code instead of
   // re-printing it as a fatal error.
   if (error instanceof CommanderError) {
-    exit(error.exitCode);
+    requestExit(error.exitCode);
+  } else {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    consoleLog(`❌ Error: ${message}`, 'Error');
+    requestExit(1);
   }
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  consoleLog(`❌ Error: ${message}`, 'Error');
-  exit(1);
 }
