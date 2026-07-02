@@ -145,6 +145,52 @@ describe('getNextPreVersion', () => {
       ),
     ).toBe('1.0.0-alpha.3');
   });
+
+  // Regression (diverged branches): when a stable release exists on another
+  // branch (e.g. `main` at 8.1.1) that the prerelease branch hasn't merged, its
+  // `_lastRelease` stays on the old alpha line (8.0.0-alpha.5). The next
+  // prerelease must be bumped from the stable tag by the next type, not blindly
+  // continue the alpha line — otherwise it regresses below the published stable.
+  it('bumps from a higher stable tag by next type instead of continuing a stale alpha line', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '8.0.0-alpha.5' },
+          _preRelease: 'alpha',
+          _nextType: 'minor',
+          _tags: ['8.0.0-alpha.5', '8.0.0', '8.1.0', '8.1.1'],
+        }),
+      ),
+    ).toBe('8.2.0-alpha.1');
+  });
+
+  it('bumps a higher stable tag by patch when that is the next type', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '7.0.0-alpha.5' },
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['7.0.0-alpha.5', '7.0.0', '7.0.1'],
+        }),
+      ),
+    ).toBe('7.0.2-alpha.1');
+  });
+
+  // A prerelease of a higher target already exists → it becomes the highest tag
+  // and the counter continues from it (no regression, no collision).
+  it('continues from the highest prerelease tag when it outranks a stable tag', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: { version: '8.0.0-alpha.5' },
+          _preRelease: 'alpha',
+          _nextType: 'minor',
+          _tags: ['8.1.1', '8.2.0-alpha.1', '8.2.0-alpha.2'],
+        }),
+      ),
+    ).toBe('8.2.0-alpha.3');
+  });
 });
 
 describe('resolveReleaseType', () => {
