@@ -33,7 +33,11 @@ yarn-error.log*
 # Cache
 .cache/
 .npm/
-.yarn/
+
+# Yarn Berry (corepack-managed): ignore everything except committed patches
+.yarn/*
+!.yarn/patches
+.pnp.*
 
 # Temporary files
 .tmp/

@@ -42,7 +42,12 @@ export async function getPackageTags(
       .map((version) => valid(version))
       .filter((version): version is string => version !== null);
   } catch (error) {
-    logger.debug('getPackageTags failed for %s: %O', tagFormat, error);
+    // warn, not debug: a silent empty result here can regress dependency versions.
+    logger.warn(
+      'getPackageTags failed for %s (falling back to empty tag list): %O',
+      tagFormat,
+      error,
+    );
     return [];
   }
 }
