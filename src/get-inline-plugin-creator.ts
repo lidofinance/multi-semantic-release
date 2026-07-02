@@ -152,6 +152,44 @@ export const getInlinePluginCreator = (
     };
 
     /**
+     * Floor this package's next version above ALL known tags. semantic-release
+     * computes the version from a branch-scoped last release, so on a prerelease
+     * branch that lags a stable release cut elsewhere (e.g. `main` ahead of
+     * `develop`) it can regress below that stable. Must be applied on a context
+     * whose mutations survive the step — the `generateNotes` pipeline clones
+     * `nextRelease` (via `getNextInput`), so mutating it there only affects the
+     * notes; the version reaching `prepare`/`publish`/tagging stays unfloored.
+     * Call it in both `generateNotes` (so notes show the floored version) and
+     * `prepare` (so the published version and git tag actually agree).
+     * @param context - The semantic-release context.
+     * @internal
+     */
+    const floorNextReleaseVersion = (context: SemanticReleaseContext): void => {
+      if (!context.nextRelease || !pkg._nextType) {
+        return;
+      }
+
+      const corrected = pkg._preRelease
+        ? getNextPreVersion(pkg)
+        : getNextVersion(pkg);
+
+      if (corrected && corrected !== context.nextRelease.version) {
+        const tagFormat = (context.options.tagFormat as string) || '';
+        logger.debug(
+          debugPrefix,
+          `version floored from ${context.nextRelease.version} to ${corrected}`,
+        );
+        context.nextRelease.version = corrected;
+        if (tagFormat) {
+          context.nextRelease.gitTag = template(tagFormat)({
+            version: corrected,
+          });
+          context.nextRelease.name = context.nextRelease.gitTag;
+        }
+      }
+    };
+
+    /**
      * Generate notes step (after).
      * Responsible for generating the content of the release note. If multiple plugins with a generateNotes step are defined, the release notes will be the result of the concatenation of each plugin output.
      *
@@ -179,35 +217,10 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<string> => {
-      // Floor this package's own next version above ALL known tags. semantic-
-      // release computes the version from a branch-scoped last release, so on a
-      // prerelease branch that lags a stable release cut elsewhere (e.g. `main`
-      // ahead of `develop`) it can regress below that stable — and diverge from
-      // the version dependents pin (which already uses the floored value via
-      // `getNextPreVersion`). Recompute here (first wrapped hook with a
-      // populated `context.nextRelease`, still before the tag is created) so the
-      // published tag and dependent pins agree. Guarded by `_nextType`, and a
-      // no-op on the stable channel where the two computations already match.
-      if (context.nextRelease && pkg._nextType) {
-        const corrected = pkg._preRelease
-          ? getNextPreVersion(pkg)
-          : getNextVersion(pkg);
-
-        if (corrected && corrected !== context.nextRelease.version) {
-          const tagFormat = (context.options.tagFormat as string) || '';
-          logger.debug(
-            debugPrefix,
-            `version floored from ${context.nextRelease.version} to ${corrected}`,
-          );
-          context.nextRelease.version = corrected;
-          if (tagFormat) {
-            context.nextRelease.gitTag = template(tagFormat)({
-              version: corrected,
-            });
-            context.nextRelease.name = context.nextRelease.gitTag;
-          }
-        }
-      }
+      // Floor the version so the notes header shows the floored value. The
+      // mutation itself is scoped to the generateNotes pipeline (see helper) —
+      // `prepare` re-applies it on the persistent context.
+      floorNextReleaseVersion(context);
 
       // Set nextRelease for package.
       pkg._nextRelease = context.nextRelease;
@@ -288,6 +301,12 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<unknown> => {
+      // Re-apply the version floor on the persistent context so the published
+      // version and git tag match the floored value shown in the notes. Unlike
+      // generateNotes, prepare's context is not cloned, so this reaches
+      // `@semantic-release/npm` (package.json version) and core tagging.
+      floorNextReleaseVersion(context);
+
       updateManifestDeps(pkg);
 
       pkg._depsUpdated = true;
