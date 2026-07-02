@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { exit } from 'node:process';
+import process, { exit } from 'node:process';
+import type { Writable } from 'node:stream';
+import { setTimeout } from 'node:timers';
 import { inspect } from 'node:util';
 
 import { Command, CommanderError } from 'commander';
@@ -13,6 +15,24 @@ import { multiSemanticRelease } from './multi-semantic-release.js';
 import { LOGS_APPNAME } from './constants.js';
 import { logger, consoleLog } from './utils/logging/index.js';
 import type { ReleaseOptions } from './types.js';
+
+// exit() discards writes still queued on a pipe (CI: `yarn … > file`), dropping
+// the last package's release notes. Primary fix: flush both streams first (the
+// empty write's callback fires once the buffer is drained). Fallback: bail after
+// a timeout if a stalled pipe never drains, so CI can't hang forever.
+const FLUSH_TIMEOUT_MS = 10_000;
+async function exitAfterFlush(code: number): Promise<void> {
+  const flushed = (s: Writable): Promise<void> =>
+    new Promise((resolve) => s.write('', () => resolve()));
+  const timeout = new Promise<void>((resolve) => {
+    setTimeout(resolve, FLUSH_TIMEOUT_MS).unref();
+  });
+  await Promise.race([
+    Promise.all([flushed(process.stdout), flushed(process.stderr)]),
+    timeout,
+  ]);
+  exit(code);
+}
 
 /**
  * CLI entrypoint: runs multi‑semantic‑release with provided options.
@@ -52,7 +72,7 @@ export function executeRelease(options: ReleaseOptions = {}): void {
   multiSemanticRelease({ cliOptions: options }).then(
     () => {
       consoleLog('✅ Release completed successfully!', 'Success');
-      exit(0);
+      void exitAfterFlush(0);
     },
     (error) => {
       const message =
@@ -60,7 +80,7 @@ export function executeRelease(options: ReleaseOptions = {}): void {
           ? error.stack || error.message
           : inspect(error, { depth: 5 });
       consoleLog(`[multi-semantic-release]: ${message}`, 'Error');
-      exit(1);
+      void exitAfterFlush(1);
     },
   );
 }
@@ -128,9 +148,10 @@ try {
   // already written its own output, so just propagate its exit code instead of
   // re-printing it as a fatal error.
   if (error instanceof CommanderError) {
-    exit(error.exitCode);
+    void exitAfterFlush(error.exitCode);
+  } else {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    consoleLog(`❌ Error: ${message}`, 'Error');
+    void exitAfterFlush(1);
   }
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  consoleLog(`❌ Error: ${message}`, 'Error');
-  exit(1);
 }
