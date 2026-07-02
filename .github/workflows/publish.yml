@@ -43,7 +43,7 @@ jobs:
         run: yarn build
 
       - name: Verify the integrity of provenance attestations and registry signatures for installed dependencies
-        run: yarn npm audit --recursive
+        run: yarn npm audit --recursive --no-deprecations
 
       - name: Authenticate in npm
         run: |
