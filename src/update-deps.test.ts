@@ -191,6 +191,39 @@ describe('getNextPreVersion', () => {
       ),
     ).toBe('8.2.0-alpha.3');
   });
+
+  // Regression (main ahead, fresh prerelease branch): when the prerelease branch
+  // has no release of its own (`_lastRelease` empty) but a stable release exists
+  // ahead on another branch (e.g. `main` at 1.1.0 that `develop` hasn't merged),
+  // the early `1.0.0-<pre>.1` reset ignored `_tags` and regressed below the
+  // stable. It must floor above the stable tag by the next type instead.
+  it('floors above a stable tag when the prerelease branch has no prior release', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: {},
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: ['1.0.0', '1.1.0'],
+        }),
+      ),
+    ).toBe('1.1.1-alpha.1');
+  });
+
+  // With no tags at all there is nothing to floor against, so a brand-new
+  // prerelease line still starts at 1.0.0-<pre>.1.
+  it('starts a fresh prerelease at 1.0.0 when there is no prior release and no tags', () => {
+    expect(
+      getNextPreVersion(
+        pkg({
+          _lastRelease: {},
+          _preRelease: 'alpha',
+          _nextType: 'patch',
+          _tags: [],
+        }),
+      ),
+    ).toBe('1.0.0-alpha.1');
+  });
 });
 
 describe('resolveReleaseType', () => {

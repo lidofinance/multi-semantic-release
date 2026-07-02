@@ -327,14 +327,32 @@ export const getNextPreVersion = (package_: Package): string | undefined => {
   const isNewPreReleaseTag =
     lastPreReleaseTag && lastPreReleaseTag !== package_._preRelease;
 
-  return isNewPreReleaseTag || !lastVersionForCurrentRelease
-    ? `1.0.0-${package_._preRelease}.1`
-    : _nextPreVersionCases(
-        package_._tags ?? [],
-        lastVersionForCurrentRelease,
-        (package_._nextType ?? 'patch') as import('semver').ReleaseType,
-        package_._preRelease ?? '',
-      );
+  const tags = package_._tags ?? [];
+
+  // Fresh prerelease line (branch hasn't released yet, or the prerelease
+  // identifier changed): still floor above any known tag — e.g. a stable
+  // release cut on `main` that this branch hasn't merged — instead of resetting
+  // to 1.0.0 and regressing below it. Only fall back to 1.0.0-<pre>.1 when there
+  // is genuinely no tag to floor against.
+  if (isNewPreReleaseTag || !lastVersionForCurrentRelease) {
+    if (!getLatestVersion(tags, true)) {
+      return `1.0.0-${package_._preRelease}.1`;
+    }
+
+    return _nextPreVersionCases(
+      tags,
+      lastVersionForCurrentRelease || '',
+      (package_._nextType ?? 'patch') as import('semver').ReleaseType,
+      package_._preRelease ?? '',
+    );
+  }
+
+  return _nextPreVersionCases(
+    tags,
+    lastVersionForCurrentRelease,
+    (package_._nextType ?? 'patch') as import('semver').ReleaseType,
+    package_._preRelease ?? '',
+  );
 };
 
 /**
