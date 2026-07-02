@@ -1,9 +1,16 @@
 // @ts-expect-error Could not find a declaration file for module
 import { getTagHead } from 'semantic-release/lib/git.js';
+import { template } from 'lodash-es';
 
 import { getCommitsFiltered } from './get-commits-filtered.js';
+import { getPackageTags } from './utils/get-package-tags.js';
 import { logger } from './utils/logging/logger.js';
-import { resolveReleaseType, updateManifestDeps } from './update-deps.js';
+import {
+  getNextPreVersion,
+  getNextVersion,
+  resolveReleaseType,
+  updateManifestDeps,
+} from './update-deps.js';
 import type {
   MultiContext,
   Package,
@@ -91,9 +98,17 @@ export const getInlinePluginCreator = (
       // prerelease bumping can pick the next version above any existing tag and
       // avoid collisions. Gated by `deps.pullTagsForPrerelease` (default on).
       if (options.deps?.pullTagsForPrerelease !== false) {
-        pkg._tags = (context.branch.tags ?? [])
+        const branchTags = (context.branch.tags ?? [])
           .map((t) => t.version)
           .filter((v): v is string => Boolean(v));
+        // Also pull tags from all branches (not just those reachable from the
+        // current branch) so a prerelease can't regress below a stable release
+        // cut elsewhere, e.g. `main` ahead of an unmerged `develop`.
+        const allTags = await getPackageTags(
+          (context.options.tagFormat as string) || '',
+          cwd,
+        );
+        pkg._tags = [...new Set([...branchTags, ...allTags])];
       }
 
       // Filter commits by directory.
@@ -164,6 +179,36 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<string> => {
+      // Floor this package's own next version above ALL known tags. semantic-
+      // release computes the version from a branch-scoped last release, so on a
+      // prerelease branch that lags a stable release cut elsewhere (e.g. `main`
+      // ahead of `develop`) it can regress below that stable — and diverge from
+      // the version dependents pin (which already uses the floored value via
+      // `getNextPreVersion`). Recompute here (first wrapped hook with a
+      // populated `context.nextRelease`, still before the tag is created) so the
+      // published tag and dependent pins agree. Guarded by `_nextType`, and a
+      // no-op on the stable channel where the two computations already match.
+      if (context.nextRelease && pkg._nextType) {
+        const corrected = pkg._preRelease
+          ? getNextPreVersion(pkg)
+          : getNextVersion(pkg);
+
+        if (corrected && corrected !== context.nextRelease.version) {
+          const tagFormat = (context.options.tagFormat as string) || '';
+          logger.debug(
+            debugPrefix,
+            `version floored from ${context.nextRelease.version} to ${corrected}`,
+          );
+          context.nextRelease.version = corrected;
+          if (tagFormat) {
+            context.nextRelease.gitTag = template(tagFormat)({
+              version: corrected,
+            });
+            context.nextRelease.name = context.nextRelease.gitTag;
+          }
+        }
+      }
+
       // Set nextRelease for package.
       pkg._nextRelease = context.nextRelease;
 

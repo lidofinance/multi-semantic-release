@@ -47,11 +47,18 @@ const _nextPreVersionCases = (
   packageNextType: import('semver').ReleaseType,
   packagePreRelease: string,
 ): string | undefined => {
-  // Case 1: Normal release on last version and is now converted to a prerelease
-  if (!semver.prerelease(lastVersionForCurrentMultiRelease)) {
-    const { major, minor, patch } = semver.parse(
-      lastVersionForCurrentMultiRelease,
-    )!;
+  // Bump from the highest known version: the branch-scoped last release OR any
+  // existing tag. Tags may include a stable release cut on another branch that
+  // this branch hasn't merged (e.g. `main` ahead of `develop`) — without this
+  // the prerelease would regress below a published stable version.
+  const latestTag = getLatestVersion(tags, true);
+  const base = getHighestVersion(lastVersionForCurrentMultiRelease, latestTag)!;
+
+  // Case 1: base is a stable release → start a fresh prerelease of the bumped
+  // version. Guaranteed above every tag: any prerelease of a higher target
+  // would itself be the highest tag and take Case 2 instead.
+  if (!semver.prerelease(base)) {
+    const { major, minor, patch } = semver.parse(base)!;
 
     return `${semver.inc(
       `${major}.${minor}.${patch}`,
@@ -59,14 +66,9 @@ const _nextPreVersionCases = (
     )}-${packagePreRelease}.1`;
   }
 
-  // Case 2: Validates version with tags
-  const latestTag = getLatestVersion(tags, true);
-
-  return _nextPreHighestVersion(
-    latestTag,
-    lastVersionForCurrentMultiRelease,
-    packagePreRelease,
-  );
+  // Case 2: base is already a prerelease → increment it, flooring above the
+  // highest tag to avoid collisions.
+  return _nextPreHighestVersion(latestTag, base, packagePreRelease);
 };
 
 /**

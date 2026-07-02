@@ -63,6 +63,8 @@ export interface SemanticReleaseContext {
   };
   nextRelease?: {
     gitHead?: string;
+    gitTag?: string;
+    name?: string;
     version?: string;
   };
   logger: Logger;

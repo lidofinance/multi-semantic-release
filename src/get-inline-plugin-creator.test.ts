@@ -8,6 +8,10 @@ vi.mock('./get-commits-filtered.js', () => ({
 vi.mock('semantic-release/lib/git.js', () => ({
   getTagHead: vi.fn().mockResolvedValue('deadbeefsha'),
 }));
+// Avoid shelling out to `git tag`; tests drive pkg._tags directly.
+vi.mock('./utils/get-package-tags.js', () => ({
+  getPackageTags: vi.fn().mockResolvedValue([]),
+}));
 
 import { getInlinePluginCreator } from './get-inline-plugin-creator.js';
 import type {
@@ -121,6 +125,43 @@ describe('getInlinePluginCreator', () => {
     });
     await create().generateNotes({}, context);
     expect(context.lastRelease?.gitHead).toBe('deadbeefsha');
+  });
+
+  // Regression (diverged branches): semantic-release computes the version from a
+  // branch-scoped last release, so on a prerelease branch lagging a stable
+  // release cut elsewhere it can regress below stable. generateNotes must floor
+  // the package's own version (and gitTag) above all known tags.
+  it('generateNotes floors the package version above a higher stable tag', async () => {
+    pkg._preRelease = 'alpha';
+    pkg._nextType = 'minor';
+    pkg._lastRelease = { version: '8.0.0-alpha.5' };
+    pkg._tags = ['8.0.0-alpha.5', '8.0.0', '8.1.0', '8.1.1'];
+    const context = makeContext({
+      nextRelease: { version: '8.0.0-alpha.6', gitHead: 'abc' },
+      options: { tagFormat: 'a@${version}' },
+    });
+
+    await create().generateNotes({}, context);
+
+    expect(context.nextRelease?.version).toBe('8.2.0-alpha.1');
+    expect(context.nextRelease?.gitTag).toBe('a@8.2.0-alpha.1');
+    expect(context.nextRelease?.name).toBe('a@8.2.0-alpha.1');
+    expect(pkg._nextRelease?.version).toBe('8.2.0-alpha.1');
+  });
+
+  it('generateNotes leaves the version untouched when nothing needs flooring', async () => {
+    pkg._nextType = 'minor';
+    pkg._lastRelease = { version: '1.0.0' };
+    const context = makeContext({
+      nextRelease: { version: '1.1.0', gitHead: 'abc' },
+      options: { tagFormat: 'a@${version}' },
+    });
+
+    await create().generateNotes({}, context);
+
+    expect(context.nextRelease?.version).toBe('1.1.0');
+    // No override → gitTag is not synthesized here.
+    expect(context.nextRelease?.gitTag).toBeUndefined();
   });
 
   it('generateNotes appends a Dependencies section for upgraded local deps', async () => {
