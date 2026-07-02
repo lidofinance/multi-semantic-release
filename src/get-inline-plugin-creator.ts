@@ -1,16 +1,10 @@
 // @ts-expect-error Could not find a declaration file for module
 import { getTagHead } from 'semantic-release/lib/git.js';
-import { template } from 'lodash-es';
 
 import { getCommitsFiltered } from './get-commits-filtered.js';
 import { getPackageTags } from './utils/get-package-tags.js';
 import { logger } from './utils/logging/logger.js';
-import {
-  getNextPreVersion,
-  getNextVersion,
-  resolveReleaseType,
-  updateManifestDeps,
-} from './update-deps.js';
+import { resolveReleaseType, updateManifestDeps } from './update-deps.js';
 import type {
   MultiContext,
   Package,
@@ -152,44 +146,6 @@ export const getInlinePluginCreator = (
     };
 
     /**
-     * Floor this package's next version above ALL known tags. semantic-release
-     * computes the version from a branch-scoped last release, so on a prerelease
-     * branch that lags a stable release cut elsewhere (e.g. `main` ahead of
-     * `develop`) it can regress below that stable. Must be applied on a context
-     * whose mutations survive the step — the `generateNotes` pipeline clones
-     * `nextRelease` (via `getNextInput`), so mutating it there only affects the
-     * notes; the version reaching `prepare`/`publish`/tagging stays unfloored.
-     * Call it in both `generateNotes` (so notes show the floored version) and
-     * `prepare` (so the published version and git tag actually agree).
-     * @param context - The semantic-release context.
-     * @internal
-     */
-    const floorNextReleaseVersion = (context: SemanticReleaseContext): void => {
-      if (!context.nextRelease || !pkg._nextType) {
-        return;
-      }
-
-      const corrected = pkg._preRelease
-        ? getNextPreVersion(pkg)
-        : getNextVersion(pkg);
-
-      if (corrected && corrected !== context.nextRelease.version) {
-        const tagFormat = (context.options.tagFormat as string) || '';
-        logger.debug(
-          debugPrefix,
-          `version floored from ${context.nextRelease.version} to ${corrected}`,
-        );
-        context.nextRelease.version = corrected;
-        if (tagFormat) {
-          context.nextRelease.gitTag = template(tagFormat)({
-            version: corrected,
-          });
-          context.nextRelease.name = context.nextRelease.gitTag;
-        }
-      }
-    };
-
-    /**
      * Generate notes step (after).
      * Responsible for generating the content of the release note. If multiple plugins with a generateNotes step are defined, the release notes will be the result of the concatenation of each plugin output.
      *
@@ -217,12 +173,8 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<string> => {
-      // Floor the version so the notes header shows the floored value. The
-      // mutation itself is scoped to the generateNotes pipeline (see helper) —
-      // `prepare` re-applies it on the persistent context.
-      floorNextReleaseVersion(context);
-
-      // Set nextRelease for package.
+      // Use the version semantic-release computed natively. Prereleases stay
+      // correct as long as main is merged into develop (enforced by CI guard).
       pkg._nextRelease = context.nextRelease;
 
       // Wait until all todo packages are ready to generate notes.
@@ -301,12 +253,6 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<unknown> => {
-      // Re-apply the version floor on the persistent context so the published
-      // version and git tag match the floored value shown in the notes. Unlike
-      // generateNotes, prepare's context is not cloned, so this reaches
-      // `@semantic-release/npm` (package.json version) and core tagging.
-      floorNextReleaseVersion(context);
-
       updateManifestDeps(pkg);
 
       pkg._depsUpdated = true;

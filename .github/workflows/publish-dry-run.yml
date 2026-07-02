@@ -20,8 +20,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
+          # 0 = full history + all tags; semantic-release needs them to find the
+          # last release and compute the next version.
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Setup Node
         uses: actions/setup-node@v6

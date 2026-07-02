@@ -127,43 +127,6 @@ describe('getInlinePluginCreator', () => {
     expect(context.lastRelease?.gitHead).toBe('deadbeefsha');
   });
 
-  // Regression (diverged branches): semantic-release computes the version from a
-  // branch-scoped last release, so on a prerelease branch lagging a stable
-  // release cut elsewhere it can regress below stable. generateNotes must floor
-  // the package's own version (and gitTag) above all known tags.
-  it('generateNotes floors the package version above a higher stable tag', async () => {
-    pkg._preRelease = 'alpha';
-    pkg._nextType = 'minor';
-    pkg._lastRelease = { version: '8.0.0-alpha.5' };
-    pkg._tags = ['8.0.0-alpha.5', '8.0.0', '8.1.0', '8.1.1'];
-    const context = makeContext({
-      nextRelease: { version: '8.0.0-alpha.6', gitHead: 'abc' },
-      options: { tagFormat: 'a@${version}' },
-    });
-
-    await create().generateNotes({}, context);
-
-    expect(context.nextRelease?.version).toBe('8.2.0-alpha.1');
-    expect(context.nextRelease?.gitTag).toBe('a@8.2.0-alpha.1');
-    expect(context.nextRelease?.name).toBe('a@8.2.0-alpha.1');
-    expect(pkg._nextRelease?.version).toBe('8.2.0-alpha.1');
-  });
-
-  it('generateNotes leaves the version untouched when nothing needs flooring', async () => {
-    pkg._nextType = 'minor';
-    pkg._lastRelease = { version: '1.0.0' };
-    const context = makeContext({
-      nextRelease: { version: '1.1.0', gitHead: 'abc' },
-      options: { tagFormat: 'a@${version}' },
-    });
-
-    await create().generateNotes({}, context);
-
-    expect(context.nextRelease?.version).toBe('1.1.0');
-    // No override → gitTag is not synthesized here.
-    expect(context.nextRelease?.gitTag).toBeUndefined();
-  });
-
   it('generateNotes appends a Dependencies section for upgraded local deps', async () => {
     pkg.localDeps = [
       { name: 'dep', _nextRelease: { version: '2.0.0' } } as unknown as Package,
@@ -179,30 +142,6 @@ describe('getInlinePluginCreator', () => {
     expect(pkg._prepared).toBe(true);
     expect(pkg._depsUpdated).toBe(true);
     expect(result).toBe('prepared');
-  });
-
-  // Regression (published version mismatch): the generateNotes floor is scoped
-  // to the cloned generateNotes pipeline context, so the version reaching
-  // publish/tag stayed unfloored (npm E403 "cannot publish over 1.0.0-alpha.1").
-  // prepare must re-floor on its own persistent context so package.json and the
-  // git tag match the floored value. Mirrors a fresh `develop` (empty
-  // _lastRelease) with `main` already at 1.1.0.
-  it('prepare floors the package version above a higher stable tag', async () => {
-    pkg._preRelease = 'alpha';
-    pkg._nextType = 'patch';
-    pkg._lastRelease = {};
-    pkg._tags = ['1.0.0', '1.1.0'];
-    const context = makeContext({
-      nextRelease: { version: '1.0.0-alpha.1', gitHead: 'abc' },
-      options: { tagFormat: 'a@${version}' },
-    });
-
-    await create().prepare({}, context);
-
-    expect(context.nextRelease?.version).toBe('1.1.1-alpha.1');
-    expect(context.nextRelease?.gitTag).toBe('a@1.1.1-alpha.1');
-    expect(context.nextRelease?.name).toBe('a@1.1.1-alpha.1');
-    expect(plugins.prepare).toHaveBeenCalled();
   });
 
   it('publish returns the first plugin result', async () => {

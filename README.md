@@ -168,6 +168,13 @@ last recorded release (parallel prerelease lines, manual re-tagging, multiple ch
 Disable with `--deps.pullTagsForPrerelease=false` (or `deps.pullTagsForPrerelease: false` in config)
 to always bump from the last release only.
 
+> **Keep the prerelease branch in sync with the release branch.** semantic-release
+> computes a package's own next version only from tags reachable on the current
+> branch (`git tag --merged`). If `main` has a stable release the prerelease branch
+> hasn't merged, the next prerelease would regress below that stable version. Merge
+> `main` into `develop` before an alpha release (the standard semantic-release
+> [pre-releases workflow](https://semantic-release.gitbook.io/semantic-release/recipes/release-workflow/pre-releases)).
+
 ## Workspace protocol
 
 Cross-package dependencies declared with the workspace protocol are resolved to concrete versions on
@@ -206,6 +213,7 @@ const packages = await multiSemanticRelease({
 ## Development
 
 ```bash
+corepack enable     # activates the pinned Yarn Berry (packageManager field)
 yarn install        # install dependencies (Yarn)
 yarn dev            # run from source (tsx)
 yarn build          # compile to dist/
