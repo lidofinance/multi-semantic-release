@@ -114,6 +114,14 @@ export interface InlineSemanticReleasePlugin {
     _pluginOptions: unknown,
     context: SemanticReleaseContext,
   ) => Promise<unknown>;
+  success: (
+    _pluginOptions: unknown,
+    context: SemanticReleaseContext,
+  ) => Promise<void>;
+  fail: (
+    _pluginOptions: unknown,
+    context: SemanticReleaseContext,
+  ) => Promise<void>;
 }
 
 /** Represents a workspace/package participating in multi-semantic-release */

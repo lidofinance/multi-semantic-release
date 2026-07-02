@@ -22,8 +22,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
+          # 0 = full history + all tags; semantic-release needs them to find the
+          # last release and compute the next version.
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -37,8 +42,11 @@ jobs:
       - name: Build
         run: yarn build
 
-      - name: Verify the integrity of provenance attestations and registry signatures for installed dependencies
-        run: yarn audit
+      - name: Verify provenance attestations & registry signatures of installed dependencies
+        run: npm audit signatures
+
+      - name: Audit dependencies for known vulnerabilities
+        run: yarn npm audit --recursive --no-deprecations
 
       - name: Authenticate in npm
         run: |
