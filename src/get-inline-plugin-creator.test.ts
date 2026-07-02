@@ -181,6 +181,30 @@ describe('getInlinePluginCreator', () => {
     expect(result).toBe('prepared');
   });
 
+  // Regression (published version mismatch): the generateNotes floor is scoped
+  // to the cloned generateNotes pipeline context, so the version reaching
+  // publish/tag stayed unfloored (npm E403 "cannot publish over 1.0.0-alpha.1").
+  // prepare must re-floor on its own persistent context so package.json and the
+  // git tag match the floored value. Mirrors a fresh `develop` (empty
+  // _lastRelease) with `main` already at 1.1.0.
+  it('prepare floors the package version above a higher stable tag', async () => {
+    pkg._preRelease = 'alpha';
+    pkg._nextType = 'patch';
+    pkg._lastRelease = {};
+    pkg._tags = ['1.0.0', '1.1.0'];
+    const context = makeContext({
+      nextRelease: { version: '1.0.0-alpha.1', gitHead: 'abc' },
+      options: { tagFormat: 'a@${version}' },
+    });
+
+    await create().prepare({}, context);
+
+    expect(context.nextRelease?.version).toBe('1.1.1-alpha.1');
+    expect(context.nextRelease?.gitTag).toBe('a@1.1.1-alpha.1');
+    expect(context.nextRelease?.name).toBe('a@1.1.1-alpha.1');
+    expect(plugins.prepare).toHaveBeenCalled();
+  });
+
   it('publish returns the first plugin result', async () => {
     const result = await create().publish({}, makeContext());
     expect(result).toEqual({ name: 'npm' });
