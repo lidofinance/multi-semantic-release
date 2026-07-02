@@ -31,10 +31,12 @@ jobs:
       # Fail if develop is behind main — else the alpha regresses below the
       # latest stable (semantic-release only sees tags merged into the branch).
       - name: Ensure develop is not behind main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch origin main
-          if [ -n "$(git rev-list HEAD..origin/main)" ]; then
-            echo "::error::develop is behind main — merge main into develop before an alpha release"
+          behind=$(gh api "repos/${{ github.repository }}/compare/develop...main" --jq '.ahead_by')
+          if [ "$behind" -gt 0 ]; then
+            echo "::error::develop is behind main by $behind commit(s) — merge main into develop before an alpha release"
             exit 1
           fi
 
