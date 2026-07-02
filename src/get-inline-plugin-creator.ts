@@ -2,7 +2,6 @@
 import { getTagHead } from 'semantic-release/lib/git.js';
 
 import { getCommitsFiltered } from './get-commits-filtered.js';
-import { getPackageTags } from './utils/get-package-tags.js';
 import { logger } from './utils/logging/logger.js';
 import { resolveReleaseType, updateManifestDeps } from './update-deps.js';
 import type {
@@ -92,17 +91,9 @@ export const getInlinePluginCreator = (
       // prerelease bumping can pick the next version above any existing tag and
       // avoid collisions. Gated by `deps.pullTagsForPrerelease` (default on).
       if (options.deps?.pullTagsForPrerelease !== false) {
-        const branchTags = (context.branch.tags ?? [])
+        pkg._tags = (context.branch.tags ?? [])
           .map((t) => t.version)
           .filter((v): v is string => Boolean(v));
-        // Also pull tags from all branches (not just those reachable from the
-        // current branch) so a prerelease can't regress below a stable release
-        // cut elsewhere, e.g. `main` ahead of an unmerged `develop`.
-        const allTags = await getPackageTags(
-          (context.options.tagFormat as string) || '',
-          cwd,
-        );
-        pkg._tags = [...new Set([...branchTags, ...allTags])];
       }
 
       // Filter commits by directory.
@@ -173,8 +164,7 @@ export const getInlinePluginCreator = (
       _pluginOptions: unknown,
       context: SemanticReleaseContext,
     ): Promise<string> => {
-      // Use the version semantic-release computed natively. Prereleases stay
-      // correct as long as main is merged into develop (enforced by CI guard).
+      // Set nextRelease for package.
       pkg._nextRelease = context.nextRelease;
 
       // Wait until all todo packages are ready to generate notes.

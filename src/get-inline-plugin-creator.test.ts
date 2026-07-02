@@ -8,10 +8,6 @@ vi.mock('./get-commits-filtered.js', () => ({
 vi.mock('semantic-release/lib/git.js', () => ({
   getTagHead: vi.fn().mockResolvedValue('deadbeefsha'),
 }));
-// Avoid shelling out to `git tag`; tests drive pkg._tags directly.
-vi.mock('./utils/get-package-tags.js', () => ({
-  getPackageTags: vi.fn().mockResolvedValue([]),
-}));
 
 import { getInlinePluginCreator } from './get-inline-plugin-creator.js';
 import type {

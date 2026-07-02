@@ -47,18 +47,11 @@ const _nextPreVersionCases = (
   packageNextType: import('semver').ReleaseType,
   packagePreRelease: string,
 ): string | undefined => {
-  // Bump from the highest known version: the branch-scoped last release OR any
-  // existing tag. Tags may include a stable release cut on another branch that
-  // this branch hasn't merged (e.g. `main` ahead of `develop`) — without this
-  // the prerelease would regress below a published stable version.
-  const latestTag = getLatestVersion(tags, true);
-  const base = getHighestVersion(lastVersionForCurrentMultiRelease, latestTag)!;
-
-  // Case 1: base is a stable release → start a fresh prerelease of the bumped
-  // version. Guaranteed above every tag: any prerelease of a higher target
-  // would itself be the highest tag and take Case 2 instead.
-  if (!semver.prerelease(base)) {
-    const { major, minor, patch } = semver.parse(base)!;
+  // Case 1: Normal release on last version and is now converted to a prerelease
+  if (!semver.prerelease(lastVersionForCurrentMultiRelease)) {
+    const { major, minor, patch } = semver.parse(
+      lastVersionForCurrentMultiRelease,
+    )!;
 
     return `${semver.inc(
       `${major}.${minor}.${patch}`,
@@ -66,9 +59,14 @@ const _nextPreVersionCases = (
     )}-${packagePreRelease}.1`;
   }
 
-  // Case 2: base is already a prerelease → increment it, flooring above the
-  // highest tag to avoid collisions.
-  return _nextPreHighestVersion(latestTag, base, packagePreRelease);
+  // Case 2: Validates version with tags
+  const latestTag = getLatestVersion(tags, true);
+
+  return _nextPreHighestVersion(
+    latestTag,
+    lastVersionForCurrentMultiRelease,
+    packagePreRelease,
+  );
 };
 
 /**
@@ -327,32 +325,14 @@ export const getNextPreVersion = (package_: Package): string | undefined => {
   const isNewPreReleaseTag =
     lastPreReleaseTag && lastPreReleaseTag !== package_._preRelease;
 
-  const tags = package_._tags ?? [];
-
-  // Fresh prerelease line (branch hasn't released yet, or the prerelease
-  // identifier changed): still floor above any known tag — e.g. a stable
-  // release cut on `main` that this branch hasn't merged — instead of resetting
-  // to 1.0.0 and regressing below it. Only fall back to 1.0.0-<pre>.1 when there
-  // is genuinely no tag to floor against.
-  if (isNewPreReleaseTag || !lastVersionForCurrentRelease) {
-    if (!getLatestVersion(tags, true)) {
-      return `1.0.0-${package_._preRelease}.1`;
-    }
-
-    return _nextPreVersionCases(
-      tags,
-      lastVersionForCurrentRelease || '',
-      (package_._nextType ?? 'patch') as import('semver').ReleaseType,
-      package_._preRelease ?? '',
-    );
-  }
-
-  return _nextPreVersionCases(
-    tags,
-    lastVersionForCurrentRelease,
-    (package_._nextType ?? 'patch') as import('semver').ReleaseType,
-    package_._preRelease ?? '',
-  );
+  return isNewPreReleaseTag || !lastVersionForCurrentRelease
+    ? `1.0.0-${package_._preRelease}.1`
+    : _nextPreVersionCases(
+        package_._tags ?? [],
+        lastVersionForCurrentRelease,
+        (package_._nextType ?? 'patch') as import('semver').ReleaseType,
+        package_._preRelease ?? '',
+      );
 };
 
 /**
