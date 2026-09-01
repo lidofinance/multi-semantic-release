@@ -72,9 +72,14 @@ export const releasePackage = async (
 
   // Call semanticRelease() on the directory and save result to pkg.
   // Don't need to log out errors as semantic-release already does that.
+  // SEMANTIC_RELEASE_PACKAGE is set per-package so plugins that read it
+  // (e.g. semantic-release-slack-bot) report the released package's own name
+  // instead of falling back to npm_package_name, which stays fixed to
+  // whichever package.json the top-level `semantic-release`/`multi-semantic-release`
+  // process was started from.
   pkg.result = await semanticRelease(options, {
     cwd: dir,
-    env,
+    env: { ...env, SEMANTIC_RELEASE_PACKAGE: name },
     // @ts-expect-error RescopedStream is compatible with Writable
     stderr: new RescopedStream(stderr, name),
     // @ts-expect-error RescopedStream is compatible with Writable
