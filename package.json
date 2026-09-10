@@ -61,7 +61,7 @@
     "prettier": "^3.6.2",
     "tsx": "^4.20.3",
     "typescript": "6",
-    "vitest": "^4.1.8"
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "@semrel-extra/topo": "^1.14.1",
