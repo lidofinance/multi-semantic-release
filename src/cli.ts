@@ -129,6 +129,11 @@ program
     true,
   )
   .option(
+    '--summary',
+    'Write the release plan to the GitHub Actions job summary (GITHUB_STEP_SUMMARY). On by default for --dry-run, pass --no-summary to disable',
+  )
+  .option('--no-summary', 'Do not write the GitHub Actions job summary')
+  .option(
     '--tag-format <format>',
     'Format to use for creating tag names. Should include "name" and "version" vars. Default: "${name}@${version}" generates "package-name@1.0.0"',
     '${name}@${version}',

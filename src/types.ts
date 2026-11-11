@@ -11,6 +11,7 @@ export interface BaseConfig {
   branches?: string[];
   ignorePackages?: string[];
   ignorePrivate?: boolean;
+  summary?: boolean;
   [key: string]: unknown;
 }
 

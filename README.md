@@ -91,21 +91,22 @@ multi-semantic-release --ignore-packages @internal/test-utils --tag-format "v${v
 
 ## CLI options
 
-| Option                                | Description                                                                                               | Default              |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------- |
-| `-d, --dry-run`                       | Run without publishing or pushing anything.                                                               | `false`              |
-| `-s, --silent`                        | Do not print configuration information.                                                                   | `false`              |
-| `--debug`                             | Output debug logging.                                                                                     | `false`              |
-| `--sequential-init`                   | Load/initialize packages one-by-one instead of in parallel (avoids concurrent init collisions).           | `false`              |
-| `--sequential-prepare`                | Accepted for compatibility — releases always run sequentially per package.¹                               | `true`               |
-| `--first-parent`                      | Apply commit filtering to the current branch only.                                                        | `false`              |
-| `--deps.bump <rule>`                  | How to rewrite a changed dependency's version: `override`, `satisfy`, `inherit`.                          | `override`           |
-| `--deps.release <type>`               | Release type for a dependent when one of its local deps changes: `patch`, `minor`, `major`, `inherit`.    | `patch`              |
-| `--deps.prefix <prefix>`              | Prefix for the rewritten dep version when `--deps.bump=override`: `^`, `~`, or empty.                     | `""`                 |
-| `--deps.pullTagsForPrerelease [bool]` | Consider existing git tags when computing a dependency's next **prerelease** version (avoids collisions). | `true`               |
-| `--ignore-packages <pkgs...>`         | Packages to exclude from the release.                                                                     | `[]`                 |
-| `--ignore-private`                    | Exclude `"private": true` packages (pass `--no-ignore-private` to include them).                          | `true`               |
-| `--tag-format <format>`               | Git tag template. Supports `${name}` and `${version}`.                                                    | `${name}@${version}` |
+| Option                                | Description                                                                                                           | Default              |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `-d, --dry-run`                       | Run without publishing or pushing anything.                                                                           | `false`              |
+| `-s, --silent`                        | Do not print configuration information.                                                                               | `false`              |
+| `--debug`                             | Output debug logging.                                                                                                 | `false`              |
+| `--sequential-init`                   | Load/initialize packages one-by-one instead of in parallel (avoids concurrent init collisions).                       | `false`              |
+| `--sequential-prepare`                | Accepted for compatibility — releases always run sequentially per package.¹                                           | `true`               |
+| `--first-parent`                      | Apply commit filtering to the current branch only.                                                                    | `false`              |
+| `--deps.bump <rule>`                  | How to rewrite a changed dependency's version: `override`, `satisfy`, `inherit`.                                      | `override`           |
+| `--deps.release <type>`               | Release type for a dependent when one of its local deps changes: `patch`, `minor`, `major`, `inherit`.                | `patch`              |
+| `--deps.prefix <prefix>`              | Prefix for the rewritten dep version when `--deps.bump=override`: `^`, `~`, or empty.                                 | `""`                 |
+| `--deps.pullTagsForPrerelease [bool]` | Consider existing git tags when computing a dependency's next **prerelease** version (avoids collisions).             | `true`               |
+| `--ignore-packages <pkgs...>`         | Packages to exclude from the release.                                                                                 | `[]`                 |
+| `--ignore-private`                    | Exclude `"private": true` packages (pass `--no-ignore-private` to include them).                                      | `true`               |
+| `--summary`                           | Write the release plan to the GitHub Actions job summary. On by default with `--dry-run`; `--no-summary` disables it. | dry-run only         |
+| `--tag-format <format>`               | Git tag template. Supports `${name}` and `${version}`.                                                                | `${name}@${version}` |
 
 > ¹ Packages are released sequentially in topological order, so `--sequential-prepare` currently has no effect; it is kept for CLI compatibility.
 
@@ -155,6 +156,19 @@ channels and plugins are resolved the usual way for each package:
   },
 }
 ```
+
+## GitHub Actions summary
+
+When `GITHUB_STEP_SUMMARY` is set (i.e. inside GitHub Actions), a dry-run appends a table to the
+job summary — package, current → next version, bump type and channel — so you don't need to dig
+through the logs:
+
+```yaml
+- run: npx multi-semantic-release --dry-run
+```
+
+Packages with nothing to release are omitted. Pass `--summary` to also write it on real runs, or
+`--no-summary` to turn it off.
 
 ## Prerelease channels & tag-aware versioning
 
