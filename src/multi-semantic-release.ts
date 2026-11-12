@@ -10,6 +10,7 @@ import { getInlinePluginCreator } from './get-inline-plugin-creator.js';
 import type { MultiContext, Package, ReleaseOptions } from './types.js';
 import { releasePackage } from './release-package.js';
 import { logger } from './utils/logging/logger.js';
+import { writeGithubSummary } from './utils/write-github-summary.js';
 
 /**
  * Runs a multi‑release for all packages in the workspace.
@@ -119,6 +120,15 @@ export const multiSemanticRelease = async ({
     Promise.resolve(0),
   );
 
+  const sorted = sortBy(packages, ({ name }) => queue.indexOf(name));
+
+  // Job summary: on by default for dry-runs, `summary: false` disables it,
+  // `summary: true` also enables it for real runs. No-op outside GitHub Actions.
+  const dryRun = Boolean(options.dryRun);
+  if (options.summary ?? dryRun) {
+    await writeGithubSummary(sorted, dryRun, env);
+  }
+
   // Return packages list
   logger.info(
     chalk.bgGreen(
@@ -126,5 +136,5 @@ export const multiSemanticRelease = async ({
     ),
   );
 
-  return sortBy(packages, ({ name }) => queue.indexOf(name));
+  return sorted;
 };
