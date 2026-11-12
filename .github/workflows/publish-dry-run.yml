@@ -2,15 +2,11 @@ name: Publish Dry Run
 on:
   workflow_dispatch:
   workflow_call:
-    secrets:
-      NPM_TOKEN:
-        description: 'NPM token'
-        required: true
 
 permissions:
   contents: write # to be able to publish a GitHub release
   issues: write # to be able to comment on released issues
-  id-token: write # to enable use of OIDC for npm provenance
+  # no id-token: this job must not be able to obtain an npm publish token
 
 jobs:
   publish-dry-run:
@@ -42,11 +38,11 @@ jobs:
 
       - name: Dry run Publish
         run: |
-          yarn semantic-release --dry-run --silent > /tmp/semantic-release-output
+          # npm verifyConditions skipped: no npm auth here; the publish job verifies OIDC before releasing
+          yarn semantic-release --dry-run --silent --verify-conditions @semantic-release/github > /tmp/semantic-release-output
           grep -E '#|###|\*' /tmp/semantic-release-output > dry_run_output.txt || [ $? -eq 1 ]
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Write results to summary
         run: |
