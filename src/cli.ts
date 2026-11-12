@@ -5,7 +5,7 @@ import type { Writable } from 'node:stream';
 import { setTimeout } from 'node:timers';
 import { inspect } from 'node:util';
 
-import { Command, CommanderError } from 'commander';
+import { Command, CommanderError, InvalidArgumentError } from 'commander';
 import chalk from 'chalk';
 
 import multisemrelPackageJson from '../package.json' with { type: 'json' };
@@ -117,26 +117,35 @@ program
   .option(
     '--deps.pullTagsForPrerelease [boolean]',
     'Optional flag to control using release tags for evaluating prerelease version bumping (true as default)',
-    true,
+    (value: string) => {
+      const normalized = value.toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
+      throw new InvalidArgumentError('Expected "true" or "false".');
+    },
   )
   .option(
     '--ignore-packages <packages...>',
     'Packages list to be ignored on bumping process',
   )
+  // No commander defaults here: they would override the config file (defaults live in getConfigMultiSemantic).
   .option(
     '--ignore-private',
-    "Exclude private packages. Enabled by default, pass 'no-ignore-private' to disable",
-    true,
+    "Exclude private packages. Enabled by default, pass '--no-ignore-private' to disable",
   )
+  .option('--no-ignore-private', 'Include private packages')
   .option(
     '--summary',
     'Write the release plan to the GitHub Actions job summary (GITHUB_STEP_SUMMARY). On by default for --dry-run, pass --no-summary to disable',
   )
   .option('--no-summary', 'Do not write the GitHub Actions job summary')
   .option(
+    '--verify-conditions <plugins...>',
+    'Plugins to run in the verifyConditions step instead of the configured ones (same as semantic-release). E.g. "@semantic-release/github" for a tokenless dry run',
+  )
+  .option(
     '--tag-format <format>',
     'Format to use for creating tag names. Should include "name" and "version" vars. Default: "${name}@${version}" generates "package-name@1.0.0"',
-    '${name}@${version}',
   )
   .action((options: ReleaseOptions) => {
     executeRelease(options);

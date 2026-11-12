@@ -71,6 +71,13 @@ export default function getManifest(path: string): Manifest {
     throw new SyntaxError(`Package name must be non-empty string: "${path}"`);
   }
 
+  // The name lands in tagFormat, which semantic-release evaluates as a lodash template.
+  if (/\$\{|<%/u.test(name)) {
+    throw new SyntaxError(
+      `Package name must not contain template syntax: "${path}"`,
+    );
+  }
+
   // Check dependencies
   const checkDeps = (scope: string): void => {
     const value = manifestObj[scope];

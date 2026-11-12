@@ -757,6 +757,7 @@ __metadata:
     eslint-plugin-prettier: "npm:^5.5.3"
     execa: "npm:^9.6.0"
     git-log-parser: "npm:^1.2.1"
+    import-meta-resolve: "npm:^4.0.0"
     lint-staged: "npm:17"
     lodash-es: "npm:^4.17.21"
     prettier: "npm:^3.6.2"

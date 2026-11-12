@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { topo } from '@semrel-extra/topo';
-import { sortBy } from 'lodash-es';
+import { castArray, sortBy } from 'lodash-es';
 import { cwd, env, stderr, stdout } from 'node:process';
 
 import { getConfigMultiSemantic } from './get-config-multi-semrel.js';
@@ -11,6 +11,16 @@ import type { MultiContext, Package, ReleaseOptions } from './types.js';
 import { releasePackage } from './release-package.js';
 import { logger } from './utils/logging/logger.js';
 import { writeGithubSummary } from './utils/write-github-summary.js';
+
+// Accepts both `a b` (variadic CLI) and `a,b` (semantic-release style).
+const parsePluginList = (value: unknown): string[] | undefined => {
+  if (value == null) return undefined;
+  const list = castArray(value as string | string[])
+    .flatMap((v) => String(v).split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : undefined;
+};
 
 /**
  * Runs a multi‑release for all packages in the workspace.
@@ -34,7 +44,14 @@ export const multiSemanticRelease = async ({
     globalOptions,
     stderr,
     stdout,
+    verifyConditions: parsePluginList(options.verifyConditions),
   };
+  if (multiContext.verifyConditions && !options.dryRun) {
+    logger.warn(
+      `verifyConditions overridden (${multiContext.verifyConditions.join(', ')}) without --dry-run: skipped plugins are first checked at publish, after the tag is created.`,
+    );
+  }
+
   // `@semrel-extra/topo` ships no types, so the call resolves to `any`.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   const topoResult = (await topo({
@@ -103,14 +120,15 @@ export const multiSemanticRelease = async ({
       const package_ = packages.find(({ name }) => name === packageName);
 
       if (package_) {
-        const result = await releasePackage(
+        await releasePackage(
           package_,
           createInlinePlugin,
           multiContext,
           options,
         );
 
-        if (result) {
+        // semantic-release resolves `false` when there is nothing to release.
+        if (package_.result) {
           return acc + 1;
         }
       }
@@ -132,7 +150,7 @@ export const multiSemanticRelease = async ({
   // Return packages list
   logger.info(
     chalk.bgGreen(
-      `Released ${released} of ${queue.length} packages, semantically!`,
+      `${dryRun ? 'Would release' : 'Released'} ${released} of ${queue.length} packages, semantically!`,
     ),
   );
 

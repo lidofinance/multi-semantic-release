@@ -74,6 +74,7 @@
     "detect-newline": "^4.0.1",
     "execa": "^9.6.0",
     "git-log-parser": "^1.2.1",
+    "import-meta-resolve": "^4.0.0",
     "lodash-es": "^4.17.21",
     "semantic-release": "^25.0.9",
     "semver": "^7.7.1",

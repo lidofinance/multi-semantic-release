@@ -1,3 +1,6 @@
+import { sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { cosmiconfig } from 'cosmiconfig';
 import { castArray } from 'lodash-es';
 
@@ -47,9 +50,17 @@ export const getConfigMultiSemantic = async (
         extendPath: string,
       ) => {
         const result: Record<string, unknown> = await resultPromise;
-        const resolvedPath = await import('import-meta-resolve').then(
-          ({ resolve }) => resolve(extendPath, import.meta.url),
-        );
+        // Project first (relative paths, its node_modules), then next to msr (npx/global).
+        const { resolve } = await import('import-meta-resolve');
+        let resolvedPath: string;
+        try {
+          resolvedPath = resolve(
+            extendPath,
+            pathToFileURL(`${cwd}${sep}`).href,
+          );
+        } catch {
+          resolvedPath = resolve(extendPath, import.meta.url);
+        }
         const importedModule = (await import(resolvedPath)) as {
           default?: Record<string, unknown>;
           [key: string]: unknown;
