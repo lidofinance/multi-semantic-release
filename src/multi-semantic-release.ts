@@ -46,6 +46,12 @@ export const multiSemanticRelease = async ({
     stdout,
     verifyConditions: parsePluginList(options.verifyConditions),
   };
+  if (multiContext.verifyConditions && !options.dryRun) {
+    logger.warn(
+      `verifyConditions overridden (${multiContext.verifyConditions.join(', ')}) without --dry-run: skipped plugins are first checked at publish, after the tag is created.`,
+    );
+  }
+
   // `@semrel-extra/topo` ships no types, so the call resolves to `any`.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   const topoResult = (await topo({
@@ -114,14 +120,15 @@ export const multiSemanticRelease = async ({
       const package_ = packages.find(({ name }) => name === packageName);
 
       if (package_) {
-        const result = await releasePackage(
+        await releasePackage(
           package_,
           createInlinePlugin,
           multiContext,
           options,
         );
 
-        if (result) {
+        // semantic-release resolves `false` when there is nothing to release.
+        if (package_.result) {
           return acc + 1;
         }
       }
@@ -143,7 +150,7 @@ export const multiSemanticRelease = async ({
   // Return packages list
   logger.info(
     chalk.bgGreen(
-      `Released ${released} of ${queue.length} packages, semantically!`,
+      `${dryRun ? 'Would release' : 'Released'} ${released} of ${queue.length} packages, semantically!`,
     ),
   );
 

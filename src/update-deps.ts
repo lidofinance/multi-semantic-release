@@ -141,12 +141,11 @@ const getDependentRelease = (
         [...ignore, package_],
         prefix,
       );
+      // Prefer the version semantic-release computed for the dep (deps are
+      // released first, in topo order); the estimate is only a fallback.
       const nextVersion = nextType
-        ? // Update the nextVersion only if there is a next type to be bumped
-
-          p._preRelease
-          ? getNextPreVersion(p)
-          : getNextVersion(p)
+        ? (p._nextRelease?.version ??
+          (p._preRelease ? getNextPreVersion(p) : getNextVersion(p)))
         : // Set the nextVersion fallback to the last local dependency package last version
           p._lastRelease && p._lastRelease.version;
 
@@ -361,24 +360,64 @@ export const resolveReleaseType = (
     prefix,
   );
 
-  // Release type found by commitAnalyzer.
-  if (package_._nextType) {
-    return package_._nextType;
-  }
-
   if (!dependentReleaseType) {
-    return undefined;
+    // Release type found by commitAnalyzer (or none).
+    return package_._nextType;
   }
 
   // Define release type for dependent package if any of its deps changes.
   // `patch`, `minor`, `major` — strictly declare the release type that occurs when any dependency is updated.
   // `inherit` — applies the "highest" release of updated deps to the package.
   // For example, if any dep has a breaking change, `major` release will be applied to the all dependants up the chain.
-
-  package_._nextType =
+  // The package's own type (from commitAnalyzer) wins only if it is higher.
+  const cascadeType =
     releaseStrategy === 'inherit' ? dependentReleaseType : releaseStrategy;
 
+  package_._nextType = highestReleaseType(package_._nextType, cascadeType);
+
   return package_._nextType;
+};
+
+const RELEASE_TYPES_ORDER = ['patch', 'minor', 'major'];
+
+// Own `pre*` types (custom releaseRules) are not ranked and always win.
+const highestReleaseType = (
+  own: string | undefined,
+  cascade: string | undefined,
+): string | undefined => {
+  if (own && !RELEASE_TYPES_ORDER.includes(own)) return own;
+
+  return RELEASE_TYPES_ORDER.indexOf(cascade ?? '') >
+    RELEASE_TYPES_ORDER.indexOf(own ?? '')
+    ? cascade
+    : (own ?? cascade);
+};
+
+// `~1.0.0` + `1.1.0` → `~1.1.0`; `1.x` + `2.0.0` → `2.x`; prerelease of next is kept.
+const SIMPLE_RANGE =
+  /^(\^|~|>=|<=|>|<|=)?(\d+|[xX*])(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?(?:-[0-9A-Za-z.-]+)?$/u;
+
+const inheritRange = (
+  currentRange: string,
+  nextVersion: string,
+): string | undefined => {
+  const match = SIMPLE_RANGE.exec(currentRange.trim());
+  const next = semver.parse(nextVersion);
+  if (!match || !next) return undefined;
+
+  const [, operator = '', ...chunks] = match;
+  const nextParts = [next.major, next.minor, next.patch];
+  const parts = chunks
+    .filter((chunk) => chunk !== undefined)
+    .map((chunk, index) =>
+      /^\d+$/u.test(chunk) ? String(nextParts[index]) : chunk,
+    );
+  const pre =
+    parts.length === 3 && next.prerelease.length > 0
+      ? `-${next.prerelease.join('.')}`
+      : '';
+
+  return `${operator}${parts.join('.')}${pre}`;
 };
 
 /**
@@ -396,11 +435,14 @@ export const resolveNextVersion = (
   bumpStrategy: string = 'override',
   prefix: string = '',
 ): string => {
+  // `workspace:^|~|*` aliases resolve like yarn/pnpm publish does (keeping the operator).
+  const isWorkspaceAlias = /^workspace:[\^~*]$/u.test(currentVersion);
+
   // handle cases of "workspace protocol" defined in yarn and pnpm workspace, whose version starts with "workspace:"
   currentVersion = substituteWorkspaceVersion(currentVersion, nextVersion);
 
   // if strategy is ignore, return the current version
-  if (bumpStrategy === 'ignore') {
+  if (bumpStrategy === 'ignore' || isWorkspaceAlias) {
     return currentVersion;
   }
 
@@ -422,15 +464,13 @@ export const resolveNextVersion = (
   // `inherit` will try to follow the current declaration version/range.
   // `~1.0.0` + `minor` turns into `~1.1.0`, `1.x` + `major` gives `2.x`,
   // but `1.x` + `minor` gives `1.x` so there will be no release, etc.
+  // Compound ranges (`>=1 <2`, `a || b`) or results that don't match fall back to override.
   if (bumpStrategy === 'inherit') {
-    const separator = '.';
-    const nextChunks = nextVersion.split(separator);
-    const currentChunks = currentVersion.split(separator);
-    const resolvedChunks = currentChunks.map((chunk: string, index: number) =>
-      nextChunks[index] ? chunk.replace(/\d+/u, nextChunks[index]) : chunk,
-    );
+    const inherited = inheritRange(currentVersion, nextVersion);
 
-    return resolvedChunks.join(separator);
+    if (inherited && semver.satisfies(nextVersion, inherited)) {
+      return inherited;
+    }
   }
 
   // "override"

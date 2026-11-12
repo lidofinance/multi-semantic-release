@@ -62,4 +62,19 @@ describe('getManifest', () => {
     write('{ "name": "pkg", "dependencies": "nope" }');
     expect(() => getManifest(path)).toThrow(/dependencies must be object/u);
   });
+
+  // Regression: the name lands in tagFormat, a lodash template.
+  it.each(['x${process.exit()}', 'a<%= 1 %>'])(
+    'rejects template syntax in name %j',
+    (name) => {
+      write(JSON.stringify({ name }));
+      expect(() => getManifest(path)).toThrow(SyntaxError);
+      expect(() => getManifest(path)).toThrow(/template syntax/u);
+    },
+  );
+
+  it.each(['@scope/pkg', 'reef-knot_root'])('accepts name %j', (name) => {
+    write(JSON.stringify({ name }));
+    expect(getManifest(path).name).toBe(name);
+  });
 });

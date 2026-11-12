@@ -13,7 +13,7 @@ vi.mock('./get-inline-plugin-creator.js', () => ({
 }));
 vi.mock('./release-package.js', () => ({ releasePackage: vi.fn() }));
 vi.mock('./utils/logging/logger.js', () => ({
-  logger: { info() {}, debug() {}, warn() {}, error() {} },
+  logger: { info: vi.fn(), debug() {}, warn: vi.fn(), error() {} },
 }));
 
 import { topo } from '@semrel-extra/topo';
@@ -21,17 +21,20 @@ import { multiSemanticRelease } from './multi-semantic-release.js';
 import { getConfigMultiSemantic } from './get-config-multi-semrel.js';
 import { getPackage } from './get-package.js';
 import { releasePackage } from './release-package.js';
+import { logger } from './utils/logging/logger.js';
 import type { Package } from './types.js';
 
 const setup = (
   sequentialInit = false,
   verifyConditions?: string | string[],
+  dryRun = false,
 ): void => {
   vi.mocked(getConfigMultiSemantic).mockResolvedValue({
     ignorePrivate: true,
     ignorePackages: [],
     sequentialInit,
     verifyConditions,
+    dryRun,
   });
   vi.mocked(topo).mockResolvedValue({
     packages: {
@@ -109,4 +112,38 @@ describe('multiSemanticRelease', () => {
       }
     },
   );
+
+  describe('verifyConditions warning', () => {
+    it('warns when verifyConditions is set without dryRun', async () => {
+      setup(false, '@semantic-release/github');
+      await multiSemanticRelease({});
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('@semantic-release/github'),
+      );
+    });
+
+    it('does not warn with dryRun', async () => {
+      setup(false, '@semantic-release/github', true);
+      await multiSemanticRelease({});
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn when verifyConditions is unset', async () => {
+      setup();
+      await multiSemanticRelease({});
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression: releasePackage always returns the package, so count by `result`.
+  it('counts only packages with a truthy result as released', async () => {
+    setup();
+    vi.mocked(releasePackage).mockImplementation((pkg: Package) => {
+      pkg.result = pkg.name === 'a' ? false : ({} as Package['result']);
+      return Promise.resolve(pkg);
+    });
+    await multiSemanticRelease({});
+    const messages = vi.mocked(logger.info).mock.calls.map(([m]) => String(m));
+    expect(messages.some((m) => m.includes('Released 1 of 2'))).toBe(true);
+  });
 });

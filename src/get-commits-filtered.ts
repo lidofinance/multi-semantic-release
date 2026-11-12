@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { relative } from 'node:path';
 import { env } from 'node:process';
 import type { Readable } from 'node:stream';
@@ -63,13 +64,22 @@ export async function getCommitsFiltered(
   });
 
   // Use git-log-parser to get the commits.
-  const relpath = relative(root.stdout, direction);
+  // realpath: --show-toplevel resolves symlinks, so a symlinked cwd would yield a path outside the repo.
+  const relpath = relative(root.stdout, realpathSync(direction));
   const firstParentBranchFilter = firstParentBranch
     ? ['--first-parent', firstParentBranch]
     : [];
   const range =
     (lastRelease ? `${lastRelease}..` : '') + (nextRelease || 'HEAD');
   const gitLogFilterQuery = [...firstParentBranchFilter, range, '--', relpath];
+  // git-log-parser reports a failed `git log` only after the stream has ended
+  // (0 commits, then an uncaught error). Fail fast with the real error instead.
+  await execa(
+    'git',
+    ['log', '--max-count=1', '--format=%H', ...gitLogFilterQuery],
+    { cwd, env },
+  );
+
   const stream = gitLogParser.parse(
     { _: gitLogFilterQuery },
     { cwd, env },
