@@ -5,7 +5,7 @@ on:
 permissions:
   contents: write # to be able to publish a GitHub release
   issues: write # to be able to comment on released issues
-  id-token: write # to enable use of OIDC for npm provenance
+  id-token: write # npm trusted publishing (OIDC) + provenance
 
 jobs:
   # Gate the whole alpha publish before the dry-run: a prerelease branch must
@@ -38,8 +38,6 @@ jobs:
     needs: guard
     if: github.ref == 'refs/heads/develop'
     uses: ./.github/workflows/publish-dry-run.yml
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   publish:
     needs: pre-publish
     runs-on: ubuntu-latest
@@ -76,17 +74,7 @@ jobs:
       - name: Audit dependencies for known vulnerabilities
         run: yarn npm audit --recursive --no-deprecations
 
-      - name: Authenticate in npm
-        run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
-          echo "workspaces-update=false" >> .npmrc
-          echo "provenance=true" >> .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish Alpha
         run: yarn semantic-release
         env:
-          NPM_CONFIG_PROVENANCE: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
