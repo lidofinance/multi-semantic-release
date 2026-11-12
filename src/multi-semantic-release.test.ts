@@ -23,11 +23,15 @@ import { getPackage } from './get-package.js';
 import { releasePackage } from './release-package.js';
 import type { Package } from './types.js';
 
-const setup = (sequentialInit = false): void => {
+const setup = (
+  sequentialInit = false,
+  verifyConditions?: string | string[],
+): void => {
   vi.mocked(getConfigMultiSemantic).mockResolvedValue({
     ignorePrivate: true,
     ignorePackages: [],
     sequentialInit,
+    verifyConditions,
   });
   vi.mocked(topo).mockResolvedValue({
     packages: {
@@ -82,4 +86,27 @@ describe('multiSemanticRelease', () => {
     expect(getPackage).toHaveBeenCalledTimes(2);
     expect(result.map((p) => p.name)).toEqual(['a', 'b']);
   });
+
+  it.each([
+    [['@semantic-release/github'], ['@semantic-release/github']],
+    [
+      '@semantic-release/github,./local',
+      ['@semantic-release/github', './local'],
+    ],
+    [
+      ['a, b', 'c'],
+      ['a', 'b', 'c'],
+    ],
+    [undefined, undefined],
+    [[''], undefined],
+  ])(
+    'passes verifyConditions %j to packages as %j',
+    async (input, expected) => {
+      setup(false, input);
+      await multiSemanticRelease({});
+      for (const [, ctx] of vi.mocked(getPackage).mock.calls) {
+        expect(ctx.verifyConditions).toEqual(expected);
+      }
+    },
+  );
 });

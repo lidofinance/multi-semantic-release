@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { topo } from '@semrel-extra/topo';
-import { sortBy } from 'lodash-es';
+import { castArray, sortBy } from 'lodash-es';
 import { cwd, env, stderr, stdout } from 'node:process';
 
 import { getConfigMultiSemantic } from './get-config-multi-semrel.js';
@@ -11,6 +11,16 @@ import type { MultiContext, Package, ReleaseOptions } from './types.js';
 import { releasePackage } from './release-package.js';
 import { logger } from './utils/logging/logger.js';
 import { writeGithubSummary } from './utils/write-github-summary.js';
+
+// Accepts both `a b` (variadic CLI) and `a,b` (semantic-release style).
+const parsePluginList = (value: unknown): string[] | undefined => {
+  if (value == null) return undefined;
+  const list = castArray(value as string | string[])
+    .flatMap((v) => String(v).split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : undefined;
+};
 
 /**
  * Runs a multi‑release for all packages in the workspace.
@@ -34,6 +44,7 @@ export const multiSemanticRelease = async ({
     globalOptions,
     stderr,
     stdout,
+    verifyConditions: parsePluginList(options.verifyConditions),
   };
   // `@semrel-extra/topo` ships no types, so the call resolves to `any`.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
