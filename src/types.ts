@@ -12,6 +12,7 @@ export interface BaseConfig {
   ignorePackages?: string[];
   ignorePrivate?: boolean;
   summary?: boolean;
+  verifyConditions?: string | string[];
   [key: string]: unknown;
 }
 
@@ -177,4 +178,5 @@ export type MultiContext = {
   globalOptions: Record<string, unknown>; // Global options for the multi-semantic-release.
   stderr: unknown; // The error stream for this multirelease.
   stdout: unknown; // The output stream for this multirelease.
+  verifyConditions?: string[]; // Overrides the verifyConditions step plugins for every package.
 };

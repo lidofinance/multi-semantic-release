@@ -25,7 +25,7 @@ import type { Logger } from './types.js';
  */
 export async function getPackage(
   path: string,
-  { cwd, env, globalOptions, stderr, stdout }: MultiContext,
+  { cwd, env, globalOptions, stderr, stdout, verifyConditions }: MultiContext,
 ): Promise<Package> {
   // Make path absolute.
   path = cleanPath(path, cwd);
@@ -54,6 +54,11 @@ export async function getPackage(
   // Sanitize user-defined plugins to avoid undefined/false entries
   if (Array.isArray(finalOptions.plugins)) {
     finalOptions.plugins = finalOptions.plugins.filter(Boolean);
+  }
+
+  // CLI override wins over global and package configs.
+  if (verifyConditions) {
+    finalOptions.verifyConditions = verifyConditions;
   }
 
   // Make a fake logger so semantic-release's get-config doesn't fail.

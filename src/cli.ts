@@ -134,6 +134,10 @@ program
   )
   .option('--no-summary', 'Do not write the GitHub Actions job summary')
   .option(
+    '--verify-conditions <plugins...>',
+    'Plugins to run in the verifyConditions step instead of the configured ones (same as semantic-release). E.g. "@semantic-release/github" for a tokenless dry run',
+  )
+  .option(
     '--tag-format <format>',
     'Format to use for creating tag names. Should include "name" and "version" vars. Default: "${name}@${version}" generates "package-name@1.0.0"',
     '${name}@${version}',

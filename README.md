@@ -107,8 +107,11 @@ multi-semantic-release --ignore-packages @internal/test-utils --tag-format "v${v
 | `--ignore-private`                    | Exclude `"private": true` packages (pass `--no-ignore-private` to include them).                                      | `true`               |
 | `--summary`                           | Write the release plan to the GitHub Actions job summary. On by default with `--dry-run`; `--no-summary` disables it. | dry-run only         |
 | `--tag-format <format>`               | Git tag template. Supports `${name}` and `${version}`.                                                                | `${name}@${version}` |
+| `--verify-conditions <plugins...>`    | Replace the `verifyConditions` plugins for every package (as in semantic-release). Space- or comma-separated.²        | configured plugins   |
 
 > ¹ Packages are released sequentially in topological order, so `--sequential-prepare` currently has no effect; it is kept for CLI compatibility.
+>
+> ² With npm trusted publishing (OIDC) the dry-run job has no npm credentials, so `@semantic-release/npm` would fail its auth check. Run the dry run with `--dry-run --verify-conditions @semantic-release/github`; the publish job still verifies npm auth before tagging.
 
 ## Configuration
 
