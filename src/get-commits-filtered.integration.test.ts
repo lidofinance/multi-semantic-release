@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import {
   mkdtempSync,
   mkdirSync,
   writeFileSync,
   rmSync,
   realpathSync,
+  symlinkSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -74,5 +75,37 @@ describe('getCommitsFiltered (integration)', () => {
       firstSha,
     );
     expect(commits).toHaveLength(0);
+  });
+
+  it('rejects for a non-existent lastRelease without uncaught exceptions', async () => {
+    const onUncaught = vi.fn();
+    process.on('uncaughtException', onUncaught);
+    try {
+      await expect(
+        getCommitsFiltered(
+          repo,
+          join(repo, 'packages/a'),
+          'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        ),
+      ).rejects.toThrow();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(onUncaught).not.toHaveBeenCalled();
+    } finally {
+      process.off('uncaughtException', onUncaught);
+    }
+  });
+
+  it('works when cwd is reached through a symlink', async () => {
+    const linkDir = mkdtempSync(join(tmpdir(), 'msr-link-'));
+    const link = join(linkDir, 'repo-link');
+    symlinkSync(repo, link);
+    try {
+      const real = await getCommitsFiltered(repo, join(repo, 'packages/a'));
+      const viaLink = await getCommitsFiltered(link, join(link, 'packages/a'));
+      expect(viaLink).toHaveLength(1);
+      expect(viaLink.map((c) => c.hash)).toEqual(real.map((c) => c.hash));
+    } finally {
+      rmSync(linkDir, { recursive: true, force: true });
+    }
   });
 });

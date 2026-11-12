@@ -48,6 +48,31 @@ describe('resolveNextVersion', () => {
   it('resolves the yarn/pnpm workspace:* protocol to the next version', () => {
     expect(resolveNextVersion('workspace:*', '2.0.0')).toBe('2.0.0');
   });
+
+  it.each([
+    ['~1.0.0', '1.1.0', '~1.1.0'],
+    ['1.x', '2.0.0', '2.x'],
+    ['1.x', '1.1.0', '1.x'],
+    ['^1.0.0-alpha.1', '1.1.0-alpha.2', '^1.1.0-alpha.2'],
+    ['>=1.0.0 <2.0.0', '2.1.0', '2.1.0'],
+    ['^1.0.0', '2.0.0', '^2.0.0'],
+  ])('inherit: %s + %s -> %s', (current, next, expected) => {
+    expect(resolveNextVersion(current, next, 'inherit')).toBe(expected);
+  });
+
+  it.each([
+    ['workspace:^', '1.2.0', '', '^1.2.0'],
+    ['workspace:~', '1.2.0', '^', '~1.2.0'],
+    ['workspace:*', '1.2.0', '^', '1.2.0'],
+    ['workspace:^1.0.0', '2.0.0', '^', '^2.0.0'],
+  ])(
+    'workspace alias %s + %s keeps its operator',
+    (current, next, prefix, expected) => {
+      expect(resolveNextVersion(current, next, 'override', prefix)).toBe(
+        expected,
+      );
+    },
+  );
 });
 
 describe('getNextVersion', () => {
@@ -243,6 +268,77 @@ describe('resolveReleaseType', () => {
 
     expect(resolveReleaseType(consumer, 'override', 'patch')).toBeUndefined();
   });
+});
+
+describe('resolveReleaseType cascade', () => {
+  const mk = (overrides: Partial<Package>): Package =>
+    ({
+      deps: [],
+      localDeps: [],
+      manifest: { name: overrides.name ?? 'pkg', dependencies: {} },
+      ...overrides,
+    }) as unknown as Package;
+
+  it("writes the dep's actual next version into the consumer manifest", () => {
+    const a = mk({
+      name: 'a',
+      _lastRelease: { version: '1.0.1-alpha.1' },
+      _preRelease: 'alpha',
+      _nextType: 'minor',
+      _nextRelease: { version: '1.1.0-alpha.1' },
+      _tags: ['1.0.1-alpha.1'],
+    });
+    const b = mk({
+      name: 'b',
+      manifest: { name: 'b', dependencies: { a: '1.0.1-alpha.1' } },
+      localDeps: [a],
+    });
+
+    resolveReleaseType(b, 'override', 'patch');
+    expect(b.manifest?.dependencies?.a).toBe('1.1.0-alpha.1');
+  });
+
+  it('falls back to the estimate without _nextRelease', () => {
+    const a = mk({
+      name: 'a',
+      _lastRelease: { version: '1.0.0' },
+      _nextType: 'minor',
+    });
+    const b = mk({
+      name: 'b',
+      manifest: { name: 'b', dependencies: { a: '1.0.0' } },
+      localDeps: [a],
+    });
+
+    resolveReleaseType(b, 'override', 'patch');
+    expect(b.manifest?.dependencies?.a).toBe('1.1.0');
+  });
+
+  it.each([
+    ['patch', 'major', 'inherit', 'major'],
+    ['minor', 'minor', 'patch', 'minor'],
+    ['major', 'minor', 'inherit', 'major'],
+    ['patch', 'patch', 'major', 'major'],
+    ['premajor', 'patch', 'inherit', 'premajor'],
+    ['prerelease', 'major', 'patch', 'prerelease'],
+  ])(
+    'own %s + dep %s + strategy %s -> %s',
+    (ownType, depType, strategy, expected) => {
+      const dep = mk({
+        name: 'dep',
+        _lastRelease: { version: '1.0.0' },
+        _nextType: depType,
+      });
+      const consumer = mk({
+        name: 'consumer',
+        _nextType: ownType,
+        manifest: { name: 'consumer', dependencies: { dep: '^1.0.0' } },
+        localDeps: [dep],
+      });
+
+      expect(resolveReleaseType(consumer, 'override', strategy)).toBe(expected);
+    },
+  );
 });
 
 describe('updateManifestDeps', () => {
