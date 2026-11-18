@@ -4,6 +4,12 @@ import type { Package } from '../types.js';
 
 const escapeCell = (value: string): string => value.replaceAll('|', '\\|');
 
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
 /**
  * Renders a markdown summary of the packages that are going to be (or were) released.
  * @param packages Packages after the release run, with `_nextRelease` populated
@@ -30,6 +36,21 @@ export const renderReleaseSummary = (
     return `| ${escapeCell(pkg.name)} | ${from} | **${to}** | ${type} | ${escapeCell(channel)} |`;
   });
 
+  // Changelog per package, collapsed so the table stays readable.
+  const changelogs = releasing
+    .filter((pkg) => pkg._nextRelease?.notes?.trim())
+    .map((pkg) =>
+      [
+        '<details>',
+        `<summary>${escapeHtml(pkg.name)} ${escapeHtml(pkg._nextRelease?.version ?? '')}</summary>`,
+        '',
+        pkg._nextRelease?.notes?.trim(),
+        '',
+        '</details>',
+        '',
+      ].join('\n'),
+    );
+
   return [
     `## ${title}`,
     '',
@@ -37,6 +58,7 @@ export const renderReleaseSummary = (
     '| --- | --- | --- | --- | --- |',
     ...rows,
     '',
+    ...(changelogs.length > 0 ? ['### Changelog', '', ...changelogs] : []),
   ].join('\n');
 };
 

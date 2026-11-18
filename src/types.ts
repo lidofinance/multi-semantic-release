@@ -148,6 +148,7 @@ export type Package = {
     version?: string;
     gitHead?: string;
     gitTag?: string;
+    notes?: string;
   }; // The next release object for this cycle.
   _preRelease?: string | null;
   _tags?: string[]; // Known released versions for this package (from git tags), used to pick the next prerelease without collisions.
