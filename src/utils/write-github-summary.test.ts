@@ -48,6 +48,30 @@ describe('renderReleaseSummary', () => {
     expect(md).toContain('| c | — | **1.0.0-alpha.1** | patch | alpha |');
   });
 
+  it('adds a collapsible changelog for packages with notes', () => {
+    const md = renderReleaseSummary(
+      [
+        pkg({
+          ...released,
+          _nextRelease: { version: '1.1.0', notes: '## 1.1.0\n\n* feat: x' },
+        }),
+        pkg({ name: 'd', result: {}, _nextRelease: { version: '2.0.0' } }),
+      ],
+      true,
+    );
+
+    expect(md).toContain('### Changelog');
+    expect(md).toContain('<summary>@scope/a 1.1.0</summary>');
+    expect(md).toContain('* feat: x');
+    expect(md).not.toContain('<summary>d 2.0.0</summary>');
+  });
+
+  it('omits the changelog section when there are no notes', () => {
+    expect(renderReleaseSummary([released], true)).not.toContain(
+      '### Changelog',
+    );
+  });
+
   it('reports when nothing is released', () => {
     expect(renderReleaseSummary([skipped], true)).toContain(
       'Nothing to release.',
