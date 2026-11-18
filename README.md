@@ -163,8 +163,8 @@ channels and plugins are resolved the usual way for each package:
 ## GitHub Actions summary
 
 When `GITHUB_STEP_SUMMARY` is set (i.e. inside GitHub Actions), a dry-run appends a table to the
-job summary — package, current → next version, bump type and channel — so you don't need to dig
-through the logs:
+job summary — package, current → next version, bump type and channel — followed by each package's
+generated changelog in a collapsible block, so you don't need to dig through the logs:
 
 ```yaml
 - run: npx multi-semantic-release --dry-run

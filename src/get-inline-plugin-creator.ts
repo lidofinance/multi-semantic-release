@@ -235,8 +235,14 @@ export const getInlinePluginCreator = (
 
       logger.debug(debugPrefix, 'notes generated');
 
+      // Keep the notes on the package so they can be reported (e.g. in the job summary).
+      const result = notes.join('\n\n');
+      if (pkg._nextRelease) {
+        pkg._nextRelease.notes = result;
+      }
+
       // Return the notes.
-      return notes.join('\n\n');
+      return result;
     };
 
     const prepare = async (
